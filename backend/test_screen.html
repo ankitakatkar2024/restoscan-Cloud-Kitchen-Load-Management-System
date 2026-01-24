@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Kitchen Screen Test</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #222; color: white; }
+        .order-card { background: #444; margin: 10px; padding: 15px; border-left: 5px solid #28a745; }
+        h1 { border-bottom: 2px solid #555; padding-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <h1>👨‍🍳 Live Kitchen Screen (Test)</h1>
+    <p>Waiting for orders...</p>
+    <div id="orders-container"></div>
+
+    <script>
+        // 1. Connect to the Backend Server
+        const socket = io("http://localhost:5000");
+
+        // 2. Log connection status
+        socket.on("connect", () => {
+            console.log("Connected to Server with ID:", socket.id);
+            document.querySelector("p").innerText = "🟢 Connected! Waiting for orders...";
+        });
+
+        // 3. LISTEN for the "order_created" event
+        socket.on("order_created", (data) => {
+            console.log("New Order Received:", data);
+            
+            // Create a simple card for the new order
+            const orderDiv = document.createElement("div");
+            orderDiv.className = "order-card";
+            orderDiv.innerHTML = `
+                <h3>Order #${data.id} - ${data.customer_name}</h3>
+                <ul>
+                    ${data.items.map(item => `<li>${item.quantity}x ${item.name}</li>`).join('')}
+                </ul>
+            `;
+            
+            // Add it to the top of the list
+            document.getElementById("orders-container").prepend(orderDiv);
+        });
+    </script>
+</body>
+</html>
