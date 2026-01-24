@@ -102,7 +102,13 @@ exports.createOrder = async (req, res) => {
 
     await connection.commit();
 
-    req.app.get('socketio').emit('new_order', { id: orderId }); // Notify Admin/Kitchen
+    // ✅ FIXED: Send full details so the Screen can display it instantly!
+    req.app.get('socketio').emit('order_created', { 
+        id: orderId, 
+        customer_name, 
+        items, 
+        total_price 
+    });
 
     res.status(201).json({
       order: {
@@ -363,7 +369,7 @@ exports.requestPayment = async (req, res) => {
     // Update the method in DB
     await db.query('UPDATE orders SET payment_method = ? WHERE id = ?', [method, id]);
     
-   emitEvent('payment_updated', { id: Number(id), payment_method: method });
+   req.app.get('socketio').emit('payment_updated', { id: Number(id), payment_method: method });
     res.json({ success: true });
   } catch (err) {
     console.error('REQUEST PAYMENT ERROR:', err);
