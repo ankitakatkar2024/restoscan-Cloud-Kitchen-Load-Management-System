@@ -4,8 +4,8 @@ import io from 'socket.io-client';
 import { useSearchParams } from 'react-router-dom';
 import QRCode from "react-qr-code";
 
-// ⚠️ YOUR NETWORK IP (Ensure this matches your Backend Terminal IP)
-const API_URL = 'http://10.118.124.153:5000'; 
+// ✅ UPDATED: Now pointing to your Cloud Server
+const API_URL = 'https://restoscan-cloud-kitchen-load-management.onrender.com';
 
 // ⚠️ REPLACE WITH YOUR REAL UPI ID FOR PAYMENTS
 const MY_UPI_ID = "ankitakatkar2004@oksbi";

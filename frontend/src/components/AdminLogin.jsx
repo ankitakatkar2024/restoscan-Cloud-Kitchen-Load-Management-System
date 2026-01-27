@@ -3,7 +3,7 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
 // ⚠️ YOUR NETWORK IP
-const API_URL = 'http://10.118.124.153:5000';
+const API_URL = 'https://restoscan-cloud-kitchen-load-management.onrender.com';
 
 export default function AdminLogin() {
   const [username, setUsername] = useState('');

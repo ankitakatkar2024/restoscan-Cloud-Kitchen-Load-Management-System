@@ -7,10 +7,18 @@ import {
 } from 'recharts';
 
 // ⚠️ YOUR NETWORK IP
-const API_URL = 'http://10.118.124.153:5000';
+const API_URL = 'https://restoscan-cloud-kitchen-load-management.onrender.com';
 
 // ✅ FIX: Working placeholder for broken images
 const PLACEHOLDER_IMG = 'https://placehold.co/150';
+
+// ✅ NEW: Full Category List (Matches CustomerMenu.js)
+const CATEGORIES = [
+  'Breakfast', 'Starters', 'Soups', 'Salads', 'Platters', 'Local Specials',
+  'Mains', 'Pizza', 'Kids', 'Vegan & Healthy', 'Staples', 'Breads', 'Rice',
+  'Pasta', 'Sides', 'Desserts', 'Bakery', 'Beverages', 'Tea', 'Water',
+  'Alcohol', 'Sauces', 'Add-Ons'
+];
 
 export default function AdminDashboard() {
   const [orders, setOrders] = useState([]);
@@ -21,8 +29,8 @@ export default function AdminDashboard() {
   
   const [filterMode, setFilterMode] = useState('TODAY'); 
   const [activeModal, setActiveModal] = useState(null);
-  const [formData, setFormData] = useState({ id: null, name: '', price: '', category: 'Mains', image_url: '', is_veg: true });
-
+  const [formData, setFormData] = useState({ id: null, name: '', price: '', category: CATEGORIES[0], image_url: '', is_veg: true });
+  
   const COLORS = ['#e74c3c', '#f1c40f', '#2ecc71', '#3498db', '#9b59b6', '#ecf0f1'];
 
   useEffect(() => {
@@ -327,8 +335,10 @@ export default function AdminDashboard() {
                     <input style={styles.input} placeholder="Name" value={formData.name} onChange={e=>setFormData({...formData, name:e.target.value})} required/>
                     <div style={{display:'flex', gap:10}}>
                         <input style={{...styles.input, flex:1}} placeholder="Price" type="number" value={formData.price} onChange={e=>setFormData({...formData, price:e.target.value})} required/>
+                        
+                        {/* ✅ UPDATED: Now uses the Full List of Categories */}
                         <select style={{...styles.input, flex:1}} value={formData.category} onChange={e=>setFormData({...formData, category:e.target.value})}>
-                           {['Mains','Starters','Breakfast','Desserts','Beverages'].map(c=><option key={c} value={c}>{c}</option>)}
+                           {CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
                         </select>
                     </div>
                     <input style={styles.input} placeholder="Image URL" value={formData.image_url} onChange={e=>setFormData({...formData, image_url:e.target.value})}/>

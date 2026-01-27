@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import io from 'socket.io-client';
 
-// ⚠️ YOUR NETWORK IP
-const API_URL = 'http://10.118.124.153:5000';
+// ✅ UPDATED: Now pointing to your Cloud Server
+const API_URL = 'https://restoscan-cloud-kitchen-load-management.onrender.com';
 
 export default function Kitchen() {
   const [orders, setOrders] = useState([]);

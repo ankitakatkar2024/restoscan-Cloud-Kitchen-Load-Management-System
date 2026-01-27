@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 
-const API_URL = 'http://10.118.124.153:5000/api/auth/register';
+// ✅ UPDATED: Now pointing to your Cloud Server
+const API_URL = 'https://restoscan-cloud-kitchen-load-management.onrender.com/api/auth/register';
 
 export default function Signup() {
   const [formData, setFormData] = useState({ username: '', password: '' });

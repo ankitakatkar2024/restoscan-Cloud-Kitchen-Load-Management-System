@@ -2,7 +2,10 @@ import React, { useState } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
 
 export default function QRCodeGenerator() {
-  const baseUrl = "http://10.118.124.153:5173";
+  // ✅ UPDATED: Smart URL (Works on both Localhost & Cloud)
+  // NOTE: When testing locally with a phone, ensure you open this page 
+  // on your laptop using your IP (e.g., 192.168.x.x) so the QR code works on mobile.
+  const baseUrl = window.location.origin;
   const [tableNum, setTableNum] = useState(1);
   const menuLink = `${baseUrl}/menu?table=${tableNum}`;
 
