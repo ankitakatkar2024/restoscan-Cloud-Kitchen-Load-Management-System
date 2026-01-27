@@ -1,16 +1,26 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import io from 'socket.io-client';
+import { useNavigate } from 'react-router-dom'; // ✅ 1. Import Navigate
 
-// ✅ UPDATED: Now pointing to your Cloud Server
+// ✅ Cloud Server URL
 const API_URL = 'https://restoscan-cloud-kitchen-load-management.onrender.com';
 
 export default function Kitchen() {
   const [orders, setOrders] = useState([]);
   const [time, setTime] = useState(new Date());
-  // ✅ NEW: Tracks which order is currently selecting a time
   const [selectingTimeFor, setSelectingTimeFor] = useState(null); 
   const socketRef = useRef(null);
+  
+  const navigate = useNavigate(); // ✅ 2. Initialize Navigation
+
+  // --- 🔴 LOGOUT FUNCTION ---
+  const handleLogout = () => {
+    // Delete the "Key" so the Guard stops letting us in
+    localStorage.removeItem('kitchenAuthToken');
+    // Go back to the Login Door
+    navigate('/admin-login');
+  };
 
   // ---------------- INITIAL LOAD + SOCKET ----------------
   useEffect(() => {
@@ -30,7 +40,6 @@ export default function Kitchen() {
       fetchOrders();
     });
 
-    // ✅ UPDATED: Now accepts 'prep_time'
     socketRef.current.on('order_status_updated', ({ id, status, prep_time }) => {
       setOrders(prev => {
         if (status === 'COMPLETED') {
@@ -65,7 +74,6 @@ export default function Kitchen() {
       .catch(err => console.error('Error fetching orders:', err));
   };
 
-  // ✅ NEW: Start Cooking with Time Estimate
   const startCooking = (orderId, minutes) => {
     axios.put(`${API_URL}/api/orders/${orderId}`, { 
         status: 'PREPARING', 
@@ -142,8 +150,15 @@ export default function Kitchen() {
             </p>
           </div>
         </div>
-        <div style={styles.clockTime}>
-          {time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        
+        <div style={{display:'flex', alignItems:'center', gap:'20px'}}>
+            <div style={styles.clockTime}>
+              {time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </div>
+            {/* ✅ 3. LOGOUT BUTTON */}
+            <button onClick={handleLogout} style={styles.logoutBtn}>
+                Logout 🔒
+            </button>
         </div>
       </header>
 
@@ -161,13 +176,11 @@ export default function Kitchen() {
             >
               <div style={styles.cardHeader}>
                 <span style={styles.orderId}>#{order.id}</span>
-                <span
-                  style={{
-                    ...styles.timerBadge,
-                    background: isLate(order.created_at) ? '#ef5350' : '#efefef',
-                    color: isLate(order.created_at) ? '#fff' : '#455a64'
-                  }}
-                >
+                <span style={{
+                  ...styles.timerBadge,
+                  background: isLate(order.created_at) ? '#ef5350' : '#efefef',
+                  color: isLate(order.created_at) ? '#fff' : '#455a64'
+                }}>
                   ⏱ {getTimeElapsed(order.created_at)}
                 </span>
               </div>
@@ -293,7 +306,8 @@ const styles = {
   qtyBox: { background: '#333', color: '#fff', padding: '2px 8px', borderRadius: '4px', fontWeight:'bold' },
   actionArea: { padding: '12px', borderTop:'1px solid #eee' },
   btn: { width: '100%', padding: '12px', border: 'none', color: '#fff', cursor: 'pointer', fontWeight:'bold', borderRadius:'4px' },
-  // ✅ NEW STYLE FOR TIME BUTTONS
   timeBtn: { flex:1, padding:'10px', background:'#2196f3', color:'white', border:'none', borderRadius:'4px', cursor:'pointer', fontWeight:'bold', fontSize:'0.9em' },
-  emptyState: { gridColumn: '1 / -1', textAlign: 'center', marginTop:'50px' }
+  emptyState: { gridColumn: '1 / -1', textAlign: 'center', marginTop:'50px' },
+  // ✅ 4. STYLE FOR LOGOUT BUTTON
+  logoutBtn: { background: '#e74c3c', color: 'white', border: 'none', padding: '10px 15px', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }
 };
