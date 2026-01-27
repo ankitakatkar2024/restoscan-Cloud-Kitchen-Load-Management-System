@@ -3,11 +3,12 @@ const db = require('../config/db');
 // 1. Get All Items
 exports.getMenu = async (req, res) => {
     try {
-        const [items] = await db.query(
-            'SELECT * FROM menu_items WHERE is_available = 1'
-        );
+        // Fetch everything so Admin can see it.
+        // Frontend can filter if needed, but this prevents "missing column" errors.
+        const [items] = await db.query('SELECT * FROM menu_items');
         res.json(items);
     } catch (err) {
+        console.error("Menu Fetch Error:", err);
         res.status(500).json({ error: err.message });
     }
 };
@@ -19,8 +20,8 @@ exports.addMenuItem = async (req, res) => {
     try {
         const [result] = await db.query(
             `INSERT INTO menu_items 
-             (name, price, category, is_veg, image_url, is_available) 
-             VALUES (?, ?, ?, ?, ?, 1)`,
+             (name, price, category, is_veg, image_url, is_available, station_id) 
+             VALUES (?, ?, ?, ?, ?, 1, 1)`,
             [name, price, category, is_veg ? 1 : 0, image_url]
         );
 
@@ -29,7 +30,7 @@ exports.addMenuItem = async (req, res) => {
             id: result.insertId
         });
     } catch (err) {
-        console.error(err);
+        console.error("Add Item Error:", err);
         res.status(500).json({ error: err.message });
     }
 };
@@ -49,12 +50,11 @@ exports.updateMenuItem = async (req, res) => {
 
         res.json({ success: true });
     } catch (err) {
-        console.error(err);
         res.status(500).json({ error: err.message });
     }
 };
 
-// 4. Delete Item (soft delete)
+// 4. Delete Item (Soft Delete)
 exports.deleteMenuItem = async (req, res) => {
     const { id } = req.params;
 

@@ -1,4 +1,3 @@
-// backend/setup_cloud_db.js
 const mysql = require('mysql2/promise');
 
 const dbConfig = {
@@ -15,15 +14,15 @@ async function resetDatabase() {
     console.log("🔥 Connected to Cloud Database...");
 
     try {
-        // 1. DROP OLD TABLES (Clear the broken data)
+        // 1. DROP OLD TABLES
         console.log("⚠️ Deleting old tables...");
         await connection.query("DROP TABLE IF EXISTS order_items");
         await connection.query("DROP TABLE IF EXISTS orders");
         await connection.query("DROP TABLE IF EXISTS menu_items");
         await connection.query("DROP TABLE IF EXISTS users");
 
-        // 2. CREATE NEW TABLES
-        console.log("🏗️ Creating fresh tables...");
+        // 2. CREATE NEW TABLES (Using 'is_available')
+        console.log("🏗️ Creating new tables...");
 
         await connection.query(`
             CREATE TABLE menu_items (
@@ -34,7 +33,7 @@ async function resetDatabase() {
                 image_url TEXT,
                 is_veg BOOLEAN DEFAULT TRUE,
                 station_id INT DEFAULT 1,
-                available BOOLEAN DEFAULT TRUE
+                is_available BOOLEAN DEFAULT TRUE
             )
         `);
 
@@ -76,19 +75,19 @@ async function resetDatabase() {
             )
         `);
 
-        // 3. INSERT DEFAULT DATA
+        // 3. INSERT DUMMY DATA
         console.log("🌱 Adding Menu Items...");
         await connection.query(`
-            INSERT INTO menu_items (name, price, category, is_veg, image_url) VALUES 
-            ('Masala Dosa', 120, 'Breakfast', 1, 'https://placehold.co/200?text=Dosa'),
-            ('Paneer Tikka', 250, 'Starters', 1, 'https://placehold.co/200?text=Paneer'),
-            ('Chicken Biryani', 350, 'Mains', 0, 'https://placehold.co/200?text=Biryani'),
-            ('Cola', 50, 'Beverages', 1, 'https://placehold.co/200?text=Cola')
+            INSERT INTO menu_items (name, price, category, is_veg, is_available, image_url) VALUES 
+            ('Masala Dosa', 120, 'Breakfast', 1, 1, 'https://placehold.co/200?text=Dosa'),
+            ('Paneer Tikka', 250, 'Starters', 1, 1, 'https://placehold.co/200?text=Paneer'),
+            ('Chicken Biryani', 350, 'Mains', 0, 1, 'https://placehold.co/200?text=Biryani'),
+            ('Cola', 50, 'Beverages', 1, 1, 'https://placehold.co/200?text=Cola')
         `);
 
         await connection.query(`INSERT IGNORE INTO users (username, password, role) VALUES ('admin', 'admin123', 'admin')`);
 
-        console.log("✅ DATABASE FIXED SUCCESSFULLY!");
+        console.log("✅ DATABASE FIXED AND RESET SUCCESSFULLY!");
 
     } catch (error) {
         console.error("❌ Error:", error);
