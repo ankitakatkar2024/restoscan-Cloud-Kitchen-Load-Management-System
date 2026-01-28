@@ -2,11 +2,10 @@ import React, { useState } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
 
 export default function QRCodeGenerator() {
-  // ✅ UPDATED: Smart URL (Works on both Localhost & Cloud)
-  // NOTE: When testing locally with a phone, ensure you open this page 
-  // on your laptop using your IP (e.g., 192.168.x.x) so the QR code works on mobile.
+  // ✅ SMART URL: Automatically detects if you are on Localhost or Cloud
   const baseUrl = window.location.origin;
   const [tableNum, setTableNum] = useState(1);
+  
   const menuLink = `${baseUrl}/menu?table=${tableNum}`;
 
   const handlePrint = () => {
@@ -34,19 +33,20 @@ export default function QRCodeGenerator() {
         </div>
 
         {/* THE TICKET */}
-        <div style={styles.ticket}>
-          <h2 style={{ margin: '0 0 10px 0', color: '#fff' }}>RESTOSCAN MENU</h2>
+        {/* ✅ Added 'printable-ticket' class for the print logic below */}
+        <div style={styles.ticket} className="printable-ticket">
+          <h2 style={{ margin: '0 0 10px 0', color: 'inherit' }}>RESTOSCAN MENU</h2>
           <h3 style={{ color: '#ff5722', fontSize: '2em', margin: '0' }}>
             TABLE {tableNum}
           </h3>
 
-          <div style={{ background: 'white', padding: '15px', display: 'inline-block', margin: '15px 0' }}>
+          <div style={{ background: 'white', padding: '15px', display: 'inline-block', margin: '15px 0', border: '1px solid #ccc' }}>
             <QRCodeCanvas value={menuLink} size={180} />
           </div>
 
-          <p style={{ fontSize: '0.9em', color: '#ccc' }}>
+          <p style={{ fontSize: '0.9em', color: 'inherit' }}>
             Scan to order food instantly.<br />
-            <small>{menuLink}</small>
+            <small style={{ wordBreak: 'break-all' }}>{menuLink}</small>
           </p>
         </div>
 
@@ -55,13 +55,25 @@ export default function QRCodeGenerator() {
         </button>
       </div>
 
-      {/* PRINT CSS */}
+      {/* ✅ PRINT CSS: Forces White Paper / Black Text when printing */}
       <style>{`
         @media print {
           .no-print { display: none !important; }
-          body { background: white; }
-          .card { box-shadow: none; border: none; padding: 0; margin: 0; }
-          .ticket { border: 2px solid black; }
+          body { background: white; margin: 0; padding: 0; }
+          .card { box-shadow: none; border: none; padding: 0; margin: 0; width: 100%; max-width: none; }
+          
+          /* Force Ticket to look like a clean paper receipt */
+          .printable-ticket { 
+            border: 2px solid black !important; 
+            background: white !important; 
+            color: black !important;
+            box-shadow: none !important;
+            width: 300px; 
+            margin: 20px auto;
+          }
+          
+          /* Ensure text is black */
+          h1, h2, p { color: black !important; }
         }
       `}</style>
     </div>
@@ -96,10 +108,12 @@ const styles = {
   },
   ticket: {
     border: '2px dashed #555',
-    padding: '20px',
+    padding: '30px',
     background: '#121212',
+    color: '#fff', // White text on Dark Screen
     borderRadius: '12px',
-    margin: '20px 0'
+    margin: '20px auto',
+    maxWidth: '350px'
   },
   printButton: {
     background: '#ff5722',
