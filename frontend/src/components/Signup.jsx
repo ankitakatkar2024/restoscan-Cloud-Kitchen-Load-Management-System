@@ -2,11 +2,17 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 
-// ✅ UPDATED: Now pointing to your Cloud Server
+// ✅ Cloud Backend URL
 const API_URL = 'https://restoscan-cloud-kitchen-load-management.onrender.com/api/auth/register';
 
 export default function Signup() {
-  const [formData, setFormData] = useState({ username: '', password: '' });
+  // ✅ Added 'role' to state (Default is 'admin')
+  const [formData, setFormData] = useState({ 
+    username: '', 
+    password: '', 
+    role: 'admin' 
+  });
+  
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -17,12 +23,14 @@ export default function Signup() {
     setLoading(true);
 
     try {
+      // Now sending username, password, AND role
       const res = await axios.post(API_URL, formData);
       if (res.data.success) {
         alert('✅ Account Created! Please login.');
-        navigate('/login');
+        navigate('/admin-login');
       }
     } catch (err) {
+      console.error(err);
       setError(err.response?.data?.error || 'Registration failed');
     } finally {
       setLoading(false);
@@ -34,11 +42,12 @@ export default function Signup() {
       <div style={styles.card}>
         <div style={{textAlign:'center', marginBottom: 20}}>
             <h1 style={{margin: 0, fontSize:'2em'}}>📝</h1>
-            <h2 style={{color:'white', margin:'10px 0'}}>Register Manager</h2>
-            <p style={{color:'#888', fontSize:'0.9em'}}>Create your cloud credentials</p>
+            <h2 style={{color:'white', margin:'10px 0'}}>Create Account</h2>
+            <p style={{color:'#888', fontSize:'0.9em'}}>Join the team</p>
         </div>
 
         <form onSubmit={handleSubmit} style={{display:'flex', flexDirection:'column', gap:15}}>
+          {/* USERNAME */}
           <input
             placeholder="Choose Username"
             value={formData.username}
@@ -46,6 +55,8 @@ export default function Signup() {
             style={styles.input}
             required
           />
+
+          {/* PASSWORD */}
           <input
             type="password"
             placeholder="Choose Password"
@@ -55,6 +66,19 @@ export default function Signup() {
             required
           />
 
+          {/* ✅ ROLE SELECTOR (Fixes Database Error) */}
+          <div style={{textAlign:'left'}}>
+              <label style={{color:'#ccc', fontSize:'0.9em', marginLeft:'5px'}}>Select Role:</label>
+              <select 
+                value={formData.role} 
+                onChange={e => setFormData({ ...formData, role: e.target.value })}
+                style={styles.select}
+              >
+                  <option value="admin">Manager (Admin Access)</option>
+                  <option value="kitchen">Kitchen Staff (Chef View)</option>
+              </select>
+          </div>
+
           {error && <div style={styles.error}>{error}</div>}
           
           <button type="submit" style={styles.button} disabled={loading}>
@@ -63,7 +87,7 @@ export default function Signup() {
         </form>
 
         <p style={{textAlign:'center', color:'#888', marginTop: 20, fontSize:'0.9em'}}>
-          Already have an account? <Link to="/login" style={{color:'#2ecc71', textDecoration:'none', fontWeight:'bold'}}>Login here</Link>
+          Already have an account? <Link to="/admin-login" style={{color:'#2ecc71', textDecoration:'none', fontWeight:'bold'}}>Login here</Link>
         </p>
       </div>
     </div>
@@ -98,10 +122,22 @@ const styles = {
     outline: 'none',
     boxSizing: 'border-box'
   },
+  select: { 
+    width: '100%', 
+    padding: '14px', 
+    borderRadius: '8px', 
+    border: '1px solid #444', 
+    background: '#111', 
+    color: 'white', 
+    fontSize: '1em', 
+    outline: 'none',
+    marginTop: '5px',
+    cursor: 'pointer'
+  },
   button: { 
     width: '100%', 
     padding: '14px', 
-    background: '#2ecc71', // Green for Signup to differentiate from Login
+    background: '#2ecc71', 
     color: 'white', 
     border: 'none', 
     borderRadius: '8px', 
