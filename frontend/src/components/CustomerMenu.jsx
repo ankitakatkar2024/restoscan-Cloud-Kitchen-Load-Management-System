@@ -51,7 +51,11 @@ export default function CustomerMenu() {
   useEffect(() => {
     // Fetch Menu
     axios.get(`${API_URL}/api/menu`)
-      .then(res => setMenu(res.data))
+      .then(res => {
+        // ✅ FIX: Filter out deleted/hidden items immediately
+        const availableItems = res.data.filter(item => item.is_available !== 0);
+        setMenu(availableItems);
+      })
       .catch(err => console.error("Error loading menu:", err));
 
     // Restore Order from LocalStorage if exists

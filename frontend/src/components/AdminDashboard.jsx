@@ -31,6 +31,9 @@ export default function AdminDashboard() {
   const [activeModal, setActiveModal] = useState(null);
   const [formData, setFormData] = useState({ id: null, name: '', price: '', category: CATEGORIES[0], image_url: '', is_veg: true });
   
+  // ✅ NEW: Search State for Menu List
+  const [searchTerm, setSearchTerm] = useState('');
+
   const COLORS = ['#e74c3c', '#f1c40f', '#2ecc71', '#3498db', '#9b59b6', '#ecf0f1'];
 
   useEffect(() => {
@@ -65,22 +68,14 @@ export default function AdminDashboard() {
   };
 
   // ✅ FIX: Smart Verify Function
-  // It now accepts the whole 'order' object, not just the ID.
   const verifyPayment = async (order) => {
-    // If method is missing (null), assume it is CASH
     const methodToUse = order.payment_method || 'CASH'; 
-    
     if(window.confirm(`Confirm payment of ₹${order.total_price} via ${methodToUse}?`)) {
         try {
-            // 1. If the order had no method, we force-update it to CASH first
             if (!order.payment_method) {
                 await axios.put(`${API_URL}/api/orders/${order.id}/request-payment`, { method: 'CASH' });
             }
-            
-            // 2. Mark as Paid
             await axios.put(`${API_URL}/api/orders/${order.id}/pay`);
-            
-            // 3. Refresh Data
             fetchData(); 
         } catch(err) {
             alert("Error verifying payment. Check backend connection.");
@@ -124,8 +119,6 @@ export default function AdminDashboard() {
         
         if(order.payment_status === 'PAID') {
             totalRev += orderTotal;
-            
-            // ✅ NOW THIS WILL WORK because verifyPayment sets the method correctly
             if(order.payment_method === 'CASH') cash += orderTotal;
             if(order.payment_method === 'UPI') upi += orderTotal;
 
@@ -188,8 +181,8 @@ export default function AdminDashboard() {
     if(window.confirm("Delete item?")) axios.delete(`${API_URL}/api/menu/${id}`).then(fetchData);
   };
 
-  const closeModal = () => setActiveModal(null);
-  const openAdd = () => { setFormData({ id: null, name: '', price: '', category: 'Mains', image_url: '', is_veg: true }); setActiveModal('ADD'); };
+  const closeModal = () => { setActiveModal(null); setSearchTerm(''); };
+  const openAdd = () => { setFormData({ id: null, name: '', price: '', category: CATEGORIES[0], image_url: '', is_veg: true }); setActiveModal('ADD'); };
   const openEdit = (item) => { setFormData({ ...item, is_veg: item.is_veg === 1 || item.is_veg === true }); setActiveModal('EDIT'); };
 
   return (
@@ -258,7 +251,6 @@ export default function AdminDashboard() {
                                 </td>
                                 <td>
                                     {order.payment_status !== 'PAID' && (
-                                        // ✅ FIX: Pass entire 'order' object here
                                         <button style={styles.verifyBtn} onClick={() => verifyPayment(order)}>
                                             Verify
                                         </button>
@@ -336,7 +328,6 @@ export default function AdminDashboard() {
                     <div style={{display:'flex', gap:10}}>
                         <input style={{...styles.input, flex:1}} placeholder="Price" type="number" value={formData.price} onChange={e=>setFormData({...formData, price:e.target.value})} required/>
                         
-                        {/* ✅ UPDATED: Now uses the Full List of Categories */}
                         <select style={{...styles.input, flex:1}} value={formData.category} onChange={e=>setFormData({...formData, category:e.target.value})}>
                            {CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
                         </select>
@@ -352,12 +343,25 @@ export default function AdminDashboard() {
       {activeModal === 'LIST' && (
         <div style={styles.overlay}>
             <div style={{...styles.modal, width:'600px', maxHeight:'80vh', display:'flex', flexDirection:'column'}}>
-                <div style={{display:'flex', justifyContent:'space-between', marginBottom:20}}><h2>Menu List</h2><button onClick={closeModal} style={{background:'none', border:'none', color:'white', fontSize:'1.5em', cursor:'pointer'}}>×</button></div>
+                <div style={{display:'flex', justifyContent:'space-between', marginBottom:20, alignItems:'center'}}>
+                    <h2 style={{margin:0}}>Menu List</h2>
+                    {/* ✅ NEW: Search Bar */}
+                    <input 
+                        style={{...styles.input, padding:'8px', width:'200px'}} 
+                        placeholder="Search items..." 
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                    <button onClick={closeModal} style={{background:'none', border:'none', color:'white', fontSize:'1.5em', cursor:'pointer', marginLeft:'10px'}}>×</button>
+                </div>
+                
                 <div style={{overflowY:'auto', flex:1}}>
-                    {menuItems.map(i => (
+                    {menuItems
+                        .filter(i => i.is_available !== 0) // Hide deleted
+                        .filter(i => i.name.toLowerCase().includes(searchTerm.toLowerCase())) // ✅ Search Filter
+                        .map(i => (
                         <div key={i.id} style={styles.listItem}>
                             <div style={{display:'flex', alignItems:'center', gap:15}}>
-                                {/* ✅ FIX: Image with Fallback to prevent crash */}
                                 <img 
                                     src={i.image_url || PLACEHOLDER_IMG} 
                                     onError={(e) => e.target.src = PLACEHOLDER_IMG}
@@ -373,6 +377,10 @@ export default function AdminDashboard() {
                             </div>
                         </div>
                     ))}
+                    {/* Show message if no items match search */}
+                    {menuItems.filter(i => i.is_available !== 0 && i.name.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 && (
+                        <div style={{textAlign:'center', padding:'20px', color:'#666'}}>No items found</div>
+                    )}
                 </div>
             </div>
         </div>
