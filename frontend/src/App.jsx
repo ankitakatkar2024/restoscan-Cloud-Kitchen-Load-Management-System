@@ -54,7 +54,7 @@ function App() {
         {/* General Admin Links */}
         {isAuthenticated ? (
            <>
-             <Link to="/admin" style={linkStyle}>🛠️ Admin</Link>
+             <Link to="/admin" style={linkStyle}>🛠️ Manager</Link>
              <button onClick={handleLogout} style={logoutStyle}>Logout</button>
            </>
         ) : (
