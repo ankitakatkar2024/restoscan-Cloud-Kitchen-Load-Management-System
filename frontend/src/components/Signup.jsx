@@ -10,7 +10,8 @@ export default function Signup() {
   const [formData, setFormData] = useState({ 
     username: '', 
     password: '', 
-    role: 'admin' 
+    role: 'admin',
+    restaurantName: '' // ✅ New Field: Name of your Business 
   });
   
   const [error, setError] = useState('');
@@ -47,6 +48,16 @@ export default function Signup() {
         </div>
 
         <form onSubmit={handleSubmit} style={{display:'flex', flexDirection:'column', gap:15}}>
+
+          {/* ✅ RESTAURANT NAME INPUT */}
+          <input
+            type="text"
+            placeholder="Restaurant Name (e.g. Joe's Pizza)"
+            value={formData.restaurantName}
+            onChange={e => setFormData({ ...formData, restaurantName: e.target.value })}
+            style={styles.input}
+            required
+          />
           {/* USERNAME */}
           <input
             placeholder="Choose Username"
