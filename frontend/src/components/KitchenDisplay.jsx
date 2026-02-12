@@ -14,14 +14,12 @@ export default function Kitchen() {
   const navigate = useNavigate();
 
   /* ================= LOGOUT ================= */
-
   const handleLogout = () => {
     localStorage.removeItem('kitchenAuthToken');
     navigate('/login');
   };
 
-  /* ================= INITIAL LOAD ================= */
-
+  /* ================= INITIAL LOAD & SOCKETS ================= */
   useEffect(() => {
     fetchOrders();
 
@@ -31,34 +29,35 @@ export default function Kitchen() {
 
     socketRef.current = io(API_URL);
 
-    /* ---- ORDER CREATED ---- */
+    // ---- ORDER CREATED (Socket Fix) ----
     socketRef.current.on('order_created', (newOrder) => {
       setOrders(prev => {
         if (prev.some(o => o.id === newOrder.id)) return prev;
-        return [newOrder, ...prev];
+        // Ensure new orders have a timestamp to prevent NaN:NaN
+        const formattedOrder = {
+          ...newOrder,
+          created_at: newOrder.created_at || new Date().toISOString()
+        };
+        return [formattedOrder, ...prev];
       });
     });
 
-    /* ---- STATUS UPDATED ---- */
+    // ---- STATUS UPDATED ----
     socketRef.current.on('order_status_updated', ({ id, status, prep_time }) => {
       setOrders(prev => {
-        if (status === 'COMPLETED') {
-          return prev.filter(o => o.id !== id);
-        }
-
-        return prev.map(o =>
-          o.id === id ? { ...o, status, prep_time } : o
-        );
+        if (status === 'COMPLETED') return prev.filter(o => o.id !== id);
+        return prev.map(o => o.id === id ? { ...o, status, prep_time } : o);
       });
     });
 
-    /* ---- PAYMENT UPDATED ---- */
+    // ---- PAYMENT UPDATED ----
     socketRef.current.on('payment_updated', ({ id, payment_status }) => {
-      setOrders(prev =>
-        prev.map(o =>
-          o.id === id ? { ...o, payment_status } : o
-        )
-      );
+      setOrders(prev => prev.map(o => o.id === id ? { ...o, payment_status } : o));
+    });
+
+    // ---- SYSTEM RESET (Handled from Admin) ----
+    socketRef.current.on('system_reset', () => {
+      setOrders([]);
     });
 
     return () => {
@@ -67,8 +66,7 @@ export default function Kitchen() {
     };
   }, []);
 
-  /* ================= API ================= */
-
+  /* ================= API CALLS ================= */
   const fetchOrders = async () => {
     try {
       const res = await axios.get(`${API_URL}/api/orders/active`);
@@ -80,20 +78,12 @@ export default function Kitchen() {
 
   const startCooking = async (orderId, minutes) => {
     try {
-      await axios.put(
-        `${API_URL}/api/orders/${orderId}/status`,
-        { status: 'PREPARING', prep_time: minutes }
-      );
-
+      await axios.put(`${API_URL}/api/orders/${orderId}/status`, { 
+        status: 'PREPARING', 
+        prep_time: minutes 
+      });
       setSelectingTimeFor(null);
-
-      setOrders(prev =>
-        prev.map(o =>
-          o.id === orderId
-            ? { ...o, status: 'PREPARING', prep_time: minutes }
-            : o
-        )
-      );
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'PREPARING', prep_time: minutes } : o));
     } catch {
       alert('Failed to start order');
     }
@@ -101,213 +91,158 @@ export default function Kitchen() {
 
   const updateStatus = async (orderId, status) => {
     try {
-      await axios.put(
-        `${API_URL}/api/orders/${orderId}/status`,
-        { status }
-      );
-
+      await axios.put(`${API_URL}/api/orders/${orderId}/status`, { status });
       setOrders(prev => {
-        if (status === 'COMPLETED') {
-          return prev.filter(o => o.id !== orderId);
-        }
-
-        return prev.map(o =>
-          o.id === orderId ? { ...o, status } : o
-        );
+        if (status === 'COMPLETED') return prev.filter(o => o.id !== orderId);
+        return prev.map(o => o.id === orderId ? { ...o, status } : o);
       });
-
     } catch {
       alert('Update failed');
     }
   };
 
-  /* ================= HELPERS ================= */
+  /* ================= HELPERS (The Logic Fixes) ================= */
 
+  // ✅ FIX: "NaN:NaN" Time Logic
   const getTimeElapsed = (created) => {
-    const diff = Math.floor((Date.now() - new Date(created)) / 1000);
+    if (!created) return "00:00";
+    const startTime = new Date(created).getTime();
+    if (isNaN(startTime)) return "00:00"; // Safety fallback
+
+    const diff = Math.floor((Date.now() - startTime) / 1000);
     const mm = String(Math.floor(diff / 60)).padStart(2, '0');
     const ss = String(diff % 60).padStart(2, '0');
     return `${mm}:${ss}`;
   };
 
-  const isLate = (created) =>
-    (Date.now() - new Date(created)) / 60000 > 20;
-
-  const getItems = (items) => {
-    try {
-      return Array.isArray(items)
-        ? items
-        : JSON.parse(items || '[]');
-    } catch {
-      return [];
+  // ✅ FIX: "Empty Items" Logic
+// ✅ Replace your getItems helper with this one
+const getItems = (items) => {
+  try {
+    if (!items) return [];
+    // If it's already an array (Live Socket data), return it
+    if (Array.isArray(items)) return items;
+    // If it's a string (Database data on refresh), parse it
+    if (typeof items === 'string') {
+      const parsed = JSON.parse(items);
+      return Array.isArray(parsed) ? parsed : [];
     }
-  };
+    return [];
+  } catch (e) {
+    console.error("Item Parsing Error:", e);
+    return [];
+  }
+};
+
+  const isLate = (created) => (Date.now() - new Date(created)) / 60000 > 20;
 
   const sortedOrders = [...orders].sort((a, b) => {
     const priority = { READY: 1, PREPARING: 2, PENDING: 3 };
     return priority[a.status] - priority[b.status];
   });
 
-  /* ================= UI ================= */
-
+  /* ================= RENDER ================= */
   return (
     <div style={styles.container}>
-
       <header style={styles.header}>
         <div style={{ display: 'flex', gap: 20 }}>
           <div style={styles.logo}>🔥</div>
           <div>
             <h1 style={styles.title}>CHEF'S CONSOLE</h1>
-            <p style={styles.subtitle}>
-              {orders.length} TICKET{orders.length !== 1 && 'S'} QUEUED
-            </p>
+            <p style={styles.subtitle}>{orders.length} TICKET{orders.length !== 1 && 'S'} QUEUED</p>
           </div>
         </div>
-
-        <div style={{ display: 'flex', gap: 20 }}>
+        <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
           <div style={styles.clockTime}>
             {time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </div>
-
-          <button onClick={handleLogout} style={styles.logoutBtn}>
-            Logout
-          </button>
+          <button onClick={handleLogout} style={styles.logoutBtn}>Logout</button>
         </div>
       </header>
 
       <div style={styles.grid}>
-
         {sortedOrders.length === 0 ? (
-          <div style={styles.emptyState}>
-            <h3>All Clear</h3>
-          </div>
+          <div style={styles.emptyState}><h3>All Clear</h3></div>
         ) : sortedOrders.map(order => (
-
-          <div
-            key={order.id}
-            style={{
-              ...styles.card,
-              borderTop: `5px solid ${getStatusColor(order.status)}`
-            }}
-          >
-
+          <div key={order.id} style={{ ...styles.card, borderTop: `5px solid ${getStatusColor(order.status)}` }}>
             <div style={styles.cardHeader}>
-              <strong>#{order.id}</strong>
-
-              <span style={{
-                ...styles.timerBadge,
-                background: isLate(order.created_at)
-                  ? '#ef5350'
-                  : '#efefef'
-              }}>
+              <strong>Order #{order.id}</strong>
+              <span style={{ ...styles.timerBadge, background: isLate(order.created_at) ? '#ef5350' : '#efefef', color: isLate(order.created_at) ? 'white' : 'black' }}>
                 {getTimeElapsed(order.created_at)}
               </span>
             </div>
 
             <div style={styles.metaInfo}>
               <strong>{order.customer_name}</strong>
-              <span>{order.status}</span>
+              <span style={{ fontSize: '0.8em', textTransform: 'uppercase', fontWeight: 'bold', color: getStatusColor(order.status) }}>
+                {order.status}
+              </span>
             </div>
 
             <div style={styles.itemsList}>
               {getItems(order.items).map((item, i) => (
                 <div key={i} style={styles.itemRow}>
-                  <div style={styles.qtyBox}>
-                    {item.qty || item.quantity}
-                  </div>
-                  {item.name}
+                  <div style={styles.qtyBox}>{item.qty || item.quantity}</div>
+                  <div style={{ fontWeight: '500' }}>{item.name || item.item_name}</div>
                 </div>
               ))}
             </div>
 
             <div style={styles.actionArea}>
-
               {order.status === 'PENDING' && (
-                selectingTimeFor === order.id
-                  ? (
-                    <div style={{ display: 'flex', gap: 5 }}>
-                      {[10, 20, 30].map(m => (
-                        <button
-                          key={m}
-                          style={styles.timeBtn}
-                          onClick={() => startCooking(order.id, m)}
-                        >
-                          {m}m
-                        </button>
-                      ))}
-                    </div>
-                  )
-                  : (
-                    <button
-                      style={styles.btn}
-                      onClick={() => setSelectingTimeFor(order.id)}
-                    >
-                      START ORDER
-                    </button>
-                  )
+                selectingTimeFor === order.id ? (
+                  <div style={{ display: 'flex', gap: 5 }}>
+                    {[10, 20, 30].map(m => (
+                      <button key={m} style={styles.timeBtn} onClick={() => startCooking(order.id, m)}>{m}m</button>
+                    ))}
+                  </div>
+                ) : (
+                  <button style={styles.btn} onClick={() => setSelectingTimeFor(order.id)}>START ORDER</button>
+                )
               )}
 
               {order.status === 'PREPARING' && (
-                <button
-                  style={styles.btn}
-                  onClick={() => updateStatus(order.id, 'READY')}
-                >
-                  ORDER READY
-                </button>
+                <button style={{ ...styles.btn, background: '#42a5f5' }} onClick={() => updateStatus(order.id, 'READY')}>ORDER READY</button>
               )}
 
               {order.status === 'READY' && (
-                <button
-                  style={{
-                    ...styles.btn,
-                    background:
-                      order.payment_status === 'PAID'
-                        ? '#26a69a'
-                        : '#999'
-                  }}
-                  disabled={order.payment_status !== 'PAID'}
+                <button 
+                  style={{ ...styles.btn, background: order.payment_status === 'PAID' ? '#26a69a' : '#999' }} 
+                  disabled={order.payment_status !== 'PAID'} 
                   onClick={() => updateStatus(order.id, 'COMPLETED')}
                 >
-                  COMPLETE
+                  {order.payment_status === 'PAID' ? 'COMPLETE' : 'AWAITING PAYMENT'}
                 </button>
               )}
-
             </div>
-
           </div>
         ))}
-
       </div>
-
     </div>
   );
 }
 
 /* ================= STYLES ================= */
-
-const getStatusColor = s =>
-  s === 'PENDING' ? '#ff7043'
-  : s === 'PREPARING' ? '#42a5f5'
-  : '#26a69a';
+const getStatusColor = s => s === 'PENDING' ? '#ff7043' : s === 'PREPARING' ? '#42a5f5' : '#26a69a';
 
 const styles = {
-  container: { background: '#121212', minHeight: '100vh', color: '#fff' },
-  header: { background: '#1e1e1e', padding: 20, display: 'flex', justifyContent: 'space-between' },
+  container: { background: '#121212', minHeight: '100vh', color: '#fff', fontFamily: 'sans-serif' },
+  header: { background: '#1e1e1e', padding: '20px 40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #333' },
   logo: { fontSize: '1.8em' },
-  title: { margin: 0 },
-  subtitle: { margin: 0, color: '#94a3b8' },
-  clockTime: { fontSize: '1.5em' },
-  grid: { padding: 30, display: 'grid', gap: 25, gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' },
-  card: { background: '#fff', borderRadius: 12, color: '#000', display: 'flex', flexDirection: 'column' },
-  cardHeader: { display: 'flex', justifyContent: 'space-between', padding: 12 },
-  timerBadge: { padding: '4px 10px', borderRadius: 6 },
-  metaInfo: { padding: 12, display: 'flex', justifyContent: 'space-between' },
-  itemsList: { padding: 12, flexGrow: 1 },
-  itemRow: { display: 'flex', gap: 10, marginBottom: 8 },
-  qtyBox: { background: '#333', color: '#fff', padding: '2px 8px', borderRadius: 4 },
-  actionArea: { padding: 12 },
-  btn: { width: '100%', padding: 12, border: 'none', color: '#fff', background: '#ff7043', cursor: 'pointer' },
-  timeBtn: { flex: 1, padding: 10, background: '#2196f3', color: '#fff', border: 'none' },
-  emptyState: { textAlign: 'center', marginTop: 50 },
-  logoutBtn: { background: '#e74c3c', color: '#fff', border: 'none', padding: 10 }
+  title: { margin: 0, fontSize: '1.5em' },
+  subtitle: { margin: 0, color: '#94a3b8', fontSize: '0.9em' },
+  clockTime: { fontSize: '1.5em', fontWeight: 'bold' },
+  grid: { padding: 30, display: 'grid', gap: 25, gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' },
+  card: { background: '#fff', borderRadius: 12, color: '#000', display: 'flex', flexDirection: 'column', boxShadow: '0 4px 15px rgba(0,0,0,0.3)' },
+  cardHeader: { display: 'flex', justifyContent: 'space-between', padding: '15px 20px', borderBottom: '1px solid #eee' },
+  timerBadge: { padding: '4px 12px', borderRadius: 6, fontWeight: 'bold', fontSize: '0.9em' },
+  metaInfo: { padding: '10px 20px', display: 'flex', justifyContent: 'space-between', background: '#f8f9fa' },
+  itemsList: { padding: '20px', flexGrow: 1 },
+  itemRow: { display: 'flex', gap: 15, marginBottom: 12, alignItems: 'center', fontSize: '1.1em' },
+  qtyBox: { background: '#333', color: '#fff', padding: '2px 10px', borderRadius: 4, fontWeight: 'bold' },
+  actionArea: { padding: '15px 20px', borderTop: '1px solid #eee' },
+  btn: { width: '100%', padding: 14, border: 'none', color: '#fff', background: '#ff7043', cursor: 'pointer', borderRadius: 8, fontWeight: 'bold', fontSize: '1em' },
+  timeBtn: { flex: 1, padding: 12, background: '#2196f3', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 'bold' },
+  emptyState: { textAlign: 'center', marginTop: 100, width: '100%', gridColumn: '1 / -1', color: '#555' },
+  logoutBtn: { background: '#e74c3c', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, cursor: 'pointer', fontWeight: 'bold' }
 };

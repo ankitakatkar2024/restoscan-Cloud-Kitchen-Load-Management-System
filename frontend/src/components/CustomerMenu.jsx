@@ -19,17 +19,23 @@ export default function CustomerMenu() {
   // 2. If URL has ?table=5, it SAVES it to storage and uses it.
   // 3. If URL has no table, it loads the last saved table from storage.
   // 4. Defaults to '1' only if nothing else exists.
-  const [tableNumber, setTableNumber] = useState(() => {
-      // Use window.location to grab it immediately before React Router processes
-      const params = new URLSearchParams(window.location.search);
-      const urlTable = params.get('table');
-      
-      if (urlTable) {
-          localStorage.setItem('myTableNum', urlTable);
-          return urlTable;
-      }
-      return localStorage.getItem('myTableNum') || '1';
-  });
+// ✅ Replace your tableNumber state with this exact logic
+const [tableNumber, setTableNumber] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlTable = params.get('table');
+    
+    // Priority 1: If there is a number in the URL, USE IT and SAVE IT
+    if (urlTable) {
+        localStorage.setItem('myTableNum', urlTable);
+        return urlTable;
+    }
+    // Priority 2: If no URL param, check if we have one saved in memory
+    const savedTable = localStorage.getItem('myTableNum');
+    if (savedTable) return savedTable;
+
+    // Priority 3: Absolute fallback
+    return '1';
+});
 
   // --- STATE MANAGEMENT ---
   const [menu, setMenu] = useState([]);
