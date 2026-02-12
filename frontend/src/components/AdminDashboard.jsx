@@ -6,13 +6,9 @@ import {
   PieChart, Pie, Cell, Legend
 } from 'recharts';
 
-// ⚠️ YOUR NETWORK IP
 const API_URL = 'https://restoscan-cloud-kitchen-load-management.onrender.com';
-
-// ✅ FIX: Working placeholder for broken images
 const PLACEHOLDER_IMG = 'https://placehold.co/150';
 
-// ✅ NEW: Full Category List (Matches CustomerMenu.js)
 const CATEGORIES = [
   'Breakfast', 'Starters', 'Soups', 'Salads', 'Platters', 'Local Specials',
   'Mains', 'Pizza', 'Kids', 'Vegan & Healthy', 'Staples', 'Breads', 'Rice',
@@ -26,12 +22,9 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState({ revenue: 0, orders: 0, activeTables: 0, topItem: 'N/A', cash: 0, upi: 0 });
   const [revenueData, setRevenueData] = useState([]);
   const [categoryData, setCategoryData] = useState([]);
-  
   const [filterMode, setFilterMode] = useState('TODAY'); 
   const [activeModal, setActiveModal] = useState(null);
   const [formData, setFormData] = useState({ id: null, name: '', price: '', category: CATEGORIES[0], image_url: '', is_veg: true });
-  
-  // ✅ NEW: Search State for Menu List
   const [searchTerm, setSearchTerm] = useState('');
 
   const COLORS = ['#e74c3c', '#f1c40f', '#2ecc71', '#3498db', '#9b59b6', '#ecf0f1'];
@@ -39,8 +32,14 @@ export default function AdminDashboard() {
   useEffect(() => {
     fetchData();
     const socket = io(API_URL);
-    socket.on('new_order', fetchData);
+
+    socket.on('order_created', () => {
+        console.log("🔔 New Order! Refreshing Dashboard...");
+        fetchData();
+    });
+
     socket.on('payment_updated', fetchData); 
+    socket.on('order_status_updated', fetchData); 
     
     const interval = setInterval(fetchData, 15000); 
     return () => {
@@ -67,7 +66,19 @@ export default function AdminDashboard() {
     } catch (err) { console.error("Load Error:", err); }
   };
 
-  // ✅ FIX: Smart Verify Function
+  // ✅ SYSTEM RESET LOGIC
+  const handleSystemReset = async () => {
+    if (window.confirm("⚠️ DANGER: This will delete ALL orders and reset kitchen load to zero. Continue?")) {
+      try {
+        await axios.post(`${API_URL}/api/reset-system`);
+        alert("✅ System Reset Successfully! Kitchen is now empty.");
+        window.location.reload();
+      } catch (err) {
+        alert("❌ Reset Failed: " + err.message);
+      }
+    }
+  };
+
   const verifyPayment = async (order) => {
     const methodToUse = order.payment_method || 'CASH'; 
     if(window.confirm(`Confirm payment of ₹${order.total_price} via ${methodToUse}?`)) {
@@ -78,8 +89,7 @@ export default function AdminDashboard() {
             await axios.put(`${API_URL}/api/orders/${order.id}/pay`);
             fetchData(); 
         } catch(err) {
-            alert("Error verifying payment. Check backend connection.");
-            console.error(err);
+            alert("Error verifying payment.");
         }
     }
   };
@@ -116,7 +126,6 @@ export default function AdminDashboard() {
 
     filteredOrders.forEach(order => {
         const orderTotal = parseFloat(order.total_price) || 0;
-        
         if(order.payment_status === 'PAID') {
             totalRev += orderTotal;
             if(order.payment_method === 'CASH') cash += orderTotal;
@@ -135,9 +144,7 @@ export default function AdminDashboard() {
         }
 
         let items = [];
-        try {
-            items = typeof order.items === 'string' ? JSON.parse(order.items) : order.items;
-        } catch (e) { items = []; }
+        try { items = typeof order.items === 'string' ? JSON.parse(order.items) : order.items; } catch (e) { items = []; }
 
         if(Array.isArray(items)){
             items.forEach(i => {
@@ -154,8 +161,7 @@ export default function AdminDashboard() {
 
     setStats({
         revenue: totalRev,
-        cash, 
-        upi,
+        cash, upi,
         orders: filteredOrders.length,
         activeTables: allOrders.filter(o => o.status !== 'COMPLETED').length,
         topItem
@@ -165,7 +171,6 @@ export default function AdminDashboard() {
     if (mode !== 'TODAY') {
        chartData.sort((a, b) => new Date(a.label + ` ${now.getFullYear()}`) - new Date(b.label + ` ${now.getFullYear()}`));
     }
-
     setRevenueData(chartData);
     setCategoryData(Object.keys(categoryCounts).map(c => ({ name: c, value: categoryCounts[c] })));
   };
@@ -189,17 +194,23 @@ export default function AdminDashboard() {
     <div style={styles.container}>
       <header style={styles.header}>
         <div><h1 style={{margin:0, fontSize: '1.5em', color:'white'}}>📊 MANAGER CONSOLE</h1><div style={{fontSize:'0.8em', color:'#888', marginTop:4}}>Real-time Business Overview</div></div>
-        <div style={styles.filterBar}>
-            {['TODAY', 'WEEK', 'MONTH', 'ALL'].map(mode => (
-                <button key={mode} onClick={() => setFilterMode(mode)} style={filterMode === mode ? styles.activeFilter : styles.filterBtn}>
-                  {mode === 'ALL' ? 'All Time' : mode === 'TODAY' ? 'Today' : `Last ${mode === 'WEEK' ? '7' : '30'} Days`}
-                </button>
-            ))}
+        
+        {/* ACTION BUTTONS */}
+        <div style={{display:'flex', gap:'15px', alignItems:'center'}}>
+            <button onClick={handleSystemReset} style={styles.resetBtn}>
+                ⚠️ RESET ALL ORDERS
+            </button>
+            <div style={styles.filterBar}>
+                {['TODAY', 'WEEK', 'MONTH', 'ALL'].map(mode => (
+                    <button key={mode} onClick={() => setFilterMode(mode)} style={filterMode === mode ? styles.activeFilter : styles.filterBtn}>
+                    {mode === 'ALL' ? 'All Time' : mode === 'TODAY' ? 'Today' : `Last ${mode === 'WEEK' ? '7' : '30'} Days`}
+                    </button>
+                ))}
+            </div>
         </div>
       </header>
 
       <div style={styles.content}>
-        {/* KPI CARDS */}
         <div style={styles.kpiGrid}>
             <div style={styles.card}>
                 <div style={styles.kpiLabel}>{filterMode} REVENUE</div>
@@ -215,47 +226,24 @@ export default function AdminDashboard() {
             </div>
             <div style={styles.card}>
                 <div style={styles.kpiLabel}>TOP ITEM</div>
-                <div style={{...styles.kpiValue, fontSize:'1.1em', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{stats.topItem}</div>
+                <div style={{...styles.kpiValue, fontSize:'1.1em'}}>{stats.topItem}</div>
             </div>
         </div>
 
-        {/* ORDER HISTORY TABLE */}
         <div style={styles.card}>
             <h3>📋 Payment Verification & History</h3>
             <div style={{overflowX:'auto'}}>
                 <table style={styles.table}>
                     <thead>
-                        <tr>
-                            <th>Order ID</th>
-                            <th>Table</th>
-                            <th>Amount</th>
-                            <th>Method</th>
-                            <th>Status</th>
-                            <th>Action</th>
-                        </tr>
+                        <tr><th>Order ID</th><th>Table</th><th>Amount</th><th>Method</th><th>Status</th><th>Action</th></tr>
                     </thead>
                     <tbody>
                         {orders.slice(0, 10).map(order => (
                             <tr key={order.id} style={{borderBottom:'1px solid #333'}}>
-                                <td>#{order.id}</td>
-                                <td>{order.customer_name}</td>
-                                <td style={{fontWeight:'bold'}}>₹{order.total_price}</td>
-                                <td>
-                                    {order.payment_method === 'UPI' ? <span style={styles.tagUpi}>UPI</span> : 
-                                     order.payment_method === 'CASH' ? <span style={styles.tagCash}>CASH</span> : '-'}
-                                </td>
-                                <td>
-                                    {order.payment_status === 'PAID' 
-                                     ? <span style={{color:'#2ecc71'}}>✅ PAID</span> 
-                                     : <span style={{color:'#e74c3c'}}>⏳ PENDING</span>}
-                                </td>
-                                <td>
-                                    {order.payment_status !== 'PAID' && (
-                                        <button style={styles.verifyBtn} onClick={() => verifyPayment(order)}>
-                                            Verify
-                                        </button>
-                                    )}
-                                </td>
+                                <td>#{order.id}</td><td>{order.customer_name}</td><td style={{fontWeight:'bold'}}>₹{order.total_price}</td>
+                                <td>{order.payment_method === 'UPI' ? <span style={styles.tagUpi}>UPI</span> : order.payment_method === 'CASH' ? <span style={styles.tagCash}>CASH</span> : '-'}</td>
+                                <td>{order.payment_status === 'PAID' ? <span style={{color:'#2ecc71'}}>✅ PAID</span> : <span style={{color:'#e74c3c'}}>⏳ PENDING</span>}</td>
+                                <td>{order.payment_status !== 'PAID' && <button style={styles.verifyBtn} onClick={() => verifyPayment(order)}>Verify</button>}</td>
                             </tr>
                         ))}
                     </tbody>
@@ -265,7 +253,6 @@ export default function AdminDashboard() {
 
         <br/>
 
-        {/* CHARTS */}
         <div style={styles.mainGrid}>
             <div style={styles.card}>
                 <h3>📈 Revenue Trend ({filterMode === 'TODAY' ? 'Hourly' : 'Daily'})</h3>
@@ -276,18 +263,15 @@ export default function AdminDashboard() {
                                 <defs><linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3498db" stopOpacity={0.4}/><stop offset="95%" stopColor="#3498db" stopOpacity={0}/></linearGradient></defs>
                                 <Area type="monotone" dataKey="sales" stroke="#3498db" fillOpacity={1} fill="url(#colorSales)"/>
                                 <CartesianGrid stroke="#333" strokeDasharray="3 3"/>
-                                <XAxis dataKey="label" stroke="#777" fontSize={11} tick={{fill:'#777'}}/>
-                                <YAxis stroke="#777" fontSize={11} tick={{fill:'#777'}}/>
-                                <Tooltip contentStyle={{backgroundColor:'#222222', border:'1px solid #444', borderRadius:'8px', color:'white'}} itemStyle={{color:'#3498db'}}/>
+                                <XAxis dataKey="label" stroke="#777" fontSize={11}/><YAxis stroke="#777" fontSize={11}/>
+                                <Tooltip contentStyle={{backgroundColor:'#222', border:'1px solid #444', color:'white'}}/>
                             </AreaChart>
                         </ResponsiveContainer>
-                    ) : (
-                        <div style={{color:'#666', fontStyle:'italic'}}>No Sales Data for this Period</div>
-                    )}
+                    ) : <div style={{color:'#666'}}>No Sales Data</div>}
                 </div>
             </div>
             <div style={styles.card}>
-                <h3>🍕 Category Mix ({filterMode})</h3>
+                <h3>🍕 Category Mix</h3>
                 <div style={{height:300, width:'100%', display:'flex', justifyContent:'center', alignItems:'center'}}>
                     {categoryData.length > 0 ? (
                         <ResponsiveContainer>
@@ -295,21 +279,17 @@ export default function AdminDashboard() {
                                 <Pie data={categoryData} dataKey="value" cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5}>
                                     {categoryData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
                                 </Pie>
-                                <Legend verticalAlign="bottom" height={36}/>
-                                <Tooltip contentStyle={{backgroundColor:'#328491', border:'1px solid #444', borderRadius:'8px', color:'white'}}/>
+                                <Legend verticalAlign="bottom" height={36}/><Tooltip contentStyle={{backgroundColor:'#328491', color:'white'}}/>
                             </PieChart>
                         </ResponsiveContainer>
-                    ) : (
-                        <div style={{color:'#666', fontStyle:'italic'}}>No Data Available</div>
-                    )}
+                    ) : <div style={{color:'#666'}}>No Data Available</div>}
                 </div>
             </div>
         </div>
 
-        {/* MENU MANAGEMENT */}
         <div style={styles.card}>
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-                <div><h3 style={{margin:0}}>🍔 Menu Manager</h3><div style={{fontSize:'0.8em', color:'#888', marginTop:5}}>Add, edit or hide items instantly</div></div>
+                <div><h3>🍔 Menu Manager</h3><div style={{fontSize:'0.8em', color:'#888'}}>Manage your inventory</div></div>
                 <div style={{display:'flex', gap:10}}>
                     <button onClick={() => setActiveModal('LIST')} style={{...styles.btn, background:'#333', border:'1px solid #555'}}>View List</button>
                     <button onClick={openAdd} style={styles.btn}>+ Add Item</button>
@@ -318,7 +298,7 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* --- MODALS --- */}
+      {/* MODALS */}
       {(activeModal === 'ADD' || activeModal === 'EDIT') && (
         <div style={styles.overlay}>
             <div style={styles.modal}>
@@ -327,10 +307,7 @@ export default function AdminDashboard() {
                     <input style={styles.input} placeholder="Name" value={formData.name} onChange={e=>setFormData({...formData, name:e.target.value})} required/>
                     <div style={{display:'flex', gap:10}}>
                         <input style={{...styles.input, flex:1}} placeholder="Price" type="number" value={formData.price} onChange={e=>setFormData({...formData, price:e.target.value})} required/>
-                        
-                        <select style={{...styles.input, flex:1}} value={formData.category} onChange={e=>setFormData({...formData, category:e.target.value})}>
-                           {CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
-                        </select>
+                        <select style={{...styles.input, flex:1}} value={formData.category} onChange={e=>setFormData({...formData, category:e.target.value})}>{CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select>
                     </div>
                     <input style={styles.input} placeholder="Image URL" value={formData.image_url} onChange={e=>setFormData({...formData, image_url:e.target.value})}/>
                     <label style={{color:'white', display:'flex', gap:10}}><input type="checkbox" checked={formData.is_veg} onChange={e=>setFormData({...formData, is_veg:e.target.checked})}/> Veg?</label>
@@ -343,31 +320,15 @@ export default function AdminDashboard() {
       {activeModal === 'LIST' && (
         <div style={styles.overlay}>
             <div style={{...styles.modal, width:'600px', maxHeight:'80vh', display:'flex', flexDirection:'column'}}>
-                <div style={{display:'flex', justifyContent:'space-between', marginBottom:20, alignItems:'center'}}>
+                <div style={{display:'flex', justifyContent:'space-between', marginBottom:20}}>
                     <h2 style={{margin:0}}>Menu List</h2>
-                    {/* ✅ NEW: Search Bar */}
-                    <input 
-                        style={{...styles.input, padding:'8px', width:'200px'}} 
-                        placeholder="Search items..." 
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                    <button onClick={closeModal} style={{background:'none', border:'none', color:'white', fontSize:'1.5em', cursor:'pointer', marginLeft:'10px'}}>×</button>
+                    <input style={{...styles.input, padding:'8px', width:'200px'}} placeholder="Search items..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}/>
                 </div>
-                
                 <div style={{overflowY:'auto', flex:1}}>
-                    {menuItems
-                        .filter(i => i.is_available !== 0) // Hide deleted
-                        .filter(i => i.name.toLowerCase().includes(searchTerm.toLowerCase())) // ✅ Search Filter
-                        .map(i => (
+                    {menuItems.filter(i => i.is_available !== 0 && i.name.toLowerCase().includes(searchTerm.toLowerCase())).map(i => (
                         <div key={i.id} style={styles.listItem}>
                             <div style={{display:'flex', alignItems:'center', gap:15}}>
-                                <img 
-                                    src={i.image_url || PLACEHOLDER_IMG} 
-                                    onError={(e) => e.target.src = PLACEHOLDER_IMG}
-                                    alt="" 
-                                    style={{width:40, height:40, borderRadius:5, background:'#333', objectFit:'cover'}}
-                                />
+                                <img src={i.image_url || PLACEHOLDER_IMG} onError={e=>e.target.src=PLACEHOLDER_IMG} style={{width:40, height:40, borderRadius:5, objectFit:'cover'}}/>
                                 <div><div style={{fontWeight:'bold'}}>{i.name}</div><div style={{fontSize:'0.8em', color:'#aaa'}}>{i.category}</div></div>
                             </div>
                             <div style={{display:'flex', alignItems:'center', gap:15}}>
@@ -377,11 +338,8 @@ export default function AdminDashboard() {
                             </div>
                         </div>
                     ))}
-                    {/* Show message if no items match search */}
-                    {menuItems.filter(i => i.is_available !== 0 && i.name.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 && (
-                        <div style={{textAlign:'center', padding:'20px', color:'#666'}}>No items found</div>
-                    )}
                 </div>
+                <button onClick={closeModal} style={{marginTop:15, padding:10, background:'#444', border:'none', color:'white', borderRadius:8}}>Close</button>
             </div>
         </div>
       )}
@@ -389,29 +347,27 @@ export default function AdminDashboard() {
   );
 }
 
-// --- DARK BLACK STYLES ---
 const styles = {
   container: { background: '#111', minHeight: '100vh', color: 'white', fontFamily: '"Segoe UI", sans-serif' },
   header: { padding: '20px 40px', background: '#222', borderBottom: '1px solid #333', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+  resetBtn: { background: '#e74c3c', color: 'white', border: 'none', padding: '10px 15px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85em', boxShadow: '0 0 10px rgba(231, 76, 60, 0.3)' },
   filterBar: { display: 'flex', gap: '8px', background: '#111', padding: '5px', borderRadius: '8px' },
   filterBtn: { background: 'transparent', border: 'none', color: '#888', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.9em', fontWeight: '600' },
   activeFilter: { background: '#333', border: '1px solid #555', color: 'white', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.9em', fontWeight: '600' },
   content: { padding: '40px', maxWidth: '1400px', margin: '0 auto' },
   kpiGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '30px' },
-  card: { background: '#222', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 10px rgba(0,0,0,0.3)', border: '1px solid #333' },
-  kpiLabel: { fontSize: '0.85em', color: '#888', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '600' },
+  card: { background: '#222', padding: '25px', borderRadius: '12px', border: '1px solid #333' },
+  kpiLabel: { fontSize: '0.85em', color: '#888', textTransform: 'uppercase', fontWeight: '600' },
   kpiValue: { fontSize: '2em', fontWeight: 'bold', marginTop: '8px' },
   mainGrid: { display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '30px', marginBottom: '30px' },
-  btn: { padding: '10px 20px', background: '#e74c3c', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '0.9em' },
+  btn: { padding: '10px 20px', background: '#e74c3c', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' },
   iconBtn: { background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '1.2em' },
   overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
-  modal: { background: '#222', padding: '30px', borderRadius: '16px', width: '450px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)', border: '1px solid #333' },
-  input: { padding: '12px', borderRadius: '8px', border: '1px solid #444', background: '#111', color: 'white', fontSize: '1em', outline: 'none' },
+  modal: { background: '#222', padding: '30px', borderRadius: '16px', width: '450px', border: '1px solid #333' },
+  input: { padding: '12px', borderRadius: '8px', border: '1px solid #444', background: '#111', color: 'white', outline: 'none' },
   saveBtn: { flex: 1, padding: '12px', background: '#2ecc71', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' },
   cancelBtn: { flex: 1, padding: '12px', background: '#e74c3c', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' },
   listItem: { padding: '15px', background: '#111', marginBottom: '10px', display: 'flex', justifyContent: 'space-between', borderRadius: '10px', border: '1px solid #333', alignItems: 'center' },
-  
-  // Table Styles
   table: { width: '100%', borderCollapse: 'collapse', marginTop: 15 },
   tagUpi: { background: '#3498db', padding: '2px 8px', borderRadius: 4, fontSize: '0.8em', fontWeight:'bold' },
   tagCash: { background: '#f1c40f', color:'black', padding: '2px 8px', borderRadius: 4, fontSize: '0.8em', fontWeight:'bold' },

@@ -4,31 +4,47 @@ import io from 'socket.io-client';
 import { useSearchParams } from 'react-router-dom';
 import QRCode from "react-qr-code";
 
-// ✅ UPDATED: Now pointing to your Cloud Server
+// ✅ CONFIGURATION
 const API_URL = 'https://restoscan-cloud-kitchen-load-management.onrender.com';
-
-// ⚠️ REPLACE WITH YOUR REAL UPI ID FOR PAYMENTS
-const MY_UPI_ID = "ankitakatkar2004@oksbi";
+const MY_UPI_ID = "ankitakatkar2004@oksbi"; 
 const MY_NAME = "RestoScan Kitchen";
-
-// ✅ FIX: Use a working placeholder image service
 const PLACEHOLDER_IMG = 'https://placehold.co/150';
 
 export default function CustomerMenu() {
   const socketRef = useRef(null);
   const [searchParams] = useSearchParams();
   
+  // ✅ CRITICAL FIX: "Sticky" Table Number Logic
+  // 1. Checks URL directly first (most reliable source).
+  // 2. If URL has ?table=5, it SAVES it to storage and uses it.
+  // 3. If URL has no table, it loads the last saved table from storage.
+  // 4. Defaults to '1' only if nothing else exists.
+  const [tableNumber, setTableNumber] = useState(() => {
+      // Use window.location to grab it immediately before React Router processes
+      const params = new URLSearchParams(window.location.search);
+      const urlTable = params.get('table');
+      
+      if (urlTable) {
+          localStorage.setItem('myTableNum', urlTable);
+          return urlTable;
+      }
+      return localStorage.getItem('myTableNum') || '1';
+  });
+
   // --- STATE MANAGEMENT ---
   const [menu, setMenu] = useState([]);
   const [cart, setCart] = useState({});
   const [activeOrder, setActiveOrder] = useState(null);
   const [showBill, setShowBill] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState(null); // 'UPI' or 'CASH'
+  const [paymentMethod, setPaymentMethod] = useState(null); 
   const [stationLoad, setStationLoad] = useState({});
   const [addedItem, setAddedItem] = useState(null);
   
+  // UX States
+  const [isOrdering, setIsOrdering] = useState(false); 
+  const [isLoading, setIsLoading] = useState(true);
+
   // Filters
-  const tableNumber = searchParams.get('table') || '1';
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [onlyVeg, setOnlyVeg] = useState(false);
 
@@ -40,25 +56,28 @@ export default function CustomerMenu() {
     'Alcohol', 'Sauces', 'Add-Ons'
   ];
 
-  const uniqueCats = [...new Set(menu.map(item => item.category))];
-  const sortedTabs = [
-    'All',
-    ...diningOrder.filter(c => uniqueCats.includes(c)),
-    ...uniqueCats.filter(c => !diningOrder.includes(c))
-  ];
-
   // --- 1. INITIAL LOAD & RESTORE SESSION ---
   useEffect(() => {
-    // Fetch Menu
+    // Force update table number if URL changes (e.g. scanning a new code while app is open)
+    const urlTable = searchParams.get('table');
+    if (urlTable) {
+        setTableNumber(urlTable);
+        localStorage.setItem('myTableNum', urlTable);
+    }
+
+    // 1. Fetch Menu
     axios.get(`${API_URL}/api/menu`)
       .then(res => {
-        // ✅ FIX: Filter out deleted/hidden items immediately
         const availableItems = res.data.filter(item => item.is_available !== 0);
         setMenu(availableItems);
+        setIsLoading(false);
       })
-      .catch(err => console.error("Error loading menu:", err));
+      .catch(err => {
+        console.error("Error loading menu:", err);
+        setIsLoading(false);
+      });
 
-    // Restore Order from LocalStorage if exists
+    // 2. Restore Order from LocalStorage
     const savedOrderId = localStorage.getItem('activeOrderId');
     if (savedOrderId) {
       axios.get(`${API_URL}/api/orders/${savedOrderId}`)
@@ -88,19 +107,24 @@ export default function CustomerMenu() {
               price: i.price
             })),
             total_price: o.total_price,
-            prep_time: o.prep_time // ✅ Restore prep_time if exists
+            prep_time: o.prep_time
           });
         })
         .catch(() => localStorage.removeItem('activeOrderId'));
     }
-  }, []);
+
+    // 3. Set Global Styles Safely
+    document.body.style.backgroundColor = '#fdfbf7';
+    return () => {
+        document.body.style.backgroundColor = ''; 
+    };
+  }, [searchParams]);
 
   // --- 2. SOCKET CONNECTION ---
   useEffect(() => {
-    // Initialize Socket
     socketRef.current = io(API_URL);
 
-    // ✅ FIX: Order Status Updates (Includes Prep Time)
+    // Listener: Order Status Updates
     socketRef.current.on('order_status_updated', ({ id, status, prep_time }) => {
       setActiveOrder(prev => {
         // If order completed, clear session
@@ -116,7 +140,6 @@ export default function CustomerMenu() {
         if ((status === 'PREPARING' || status === 'READY') && navigator.vibrate) {
           navigator.vibrate([200, 100, 200]);
         }
-        // ✅ Store prep_time in state
         return { ...prev, status, prep_time };
       });
     });
@@ -125,7 +148,6 @@ export default function CustomerMenu() {
     socketRef.current.on('payment_updated', ({ id, payment_status }) => {
       setActiveOrder(prev => {
         if (prev && prev.id === id && payment_status === 'PAID') {
-            alert("✅ Payment Confirmed by Manager!");
             return { ...prev, payment_status };
         }
         return prev;
@@ -140,7 +162,6 @@ export default function CustomerMenu() {
       }));
     });
 
-    // Cleanup on unmount
     return () => {
       if (socketRef.current) socketRef.current.disconnect();
     };
@@ -148,24 +169,31 @@ export default function CustomerMenu() {
 
   // --- HELPERS ---
   const isKitchenBusy = () => {
+    // Simple check: if any station is overloaded, warn the user
+    // Note: Backend now has a 1000 limit, so this is mostly for UI feedback
     if (Object.keys(stationLoad).length === 0) return false;
     return Object.values(stationLoad).some(s => s.currentLoad >= s.maxLoad);
   };
 
   const getPrice = (price) => Number(price).toFixed(0);
   const totalItems = Object.values(cart).reduce((a, b) => a + b, 0);
+  
   const totalPrice = Object.keys(cart).reduce((sum, id) => {
     const item = menu.find(i => i.id === parseInt(id));
     if (!item) return sum;
     return sum + (item.price * cart[id]);
   }, 0);
 
+  const uniqueCats = [...new Set(menu.map(item => item.category))];
+  const sortedTabs = [
+    'All',
+    ...diningOrder.filter(c => uniqueCats.includes(c)),
+    ...uniqueCats.filter(c => !diningOrder.includes(c))
+  ];
+
   // --- ACTIONS ---
   const addToCart = (item) => {
-    if (isKitchenBusy()) return;
     setCart(prev => ({ ...prev, [item.id]: (prev[item.id] || 0) + 1 }));
-    
-    // Animation trigger
     setAddedItem(item.id);
     setTimeout(() => setAddedItem(null), 1000);
   };
@@ -180,11 +208,10 @@ export default function CustomerMenu() {
   };
 
   const placeOrder = () => {
-    if (isKitchenBusy()) {
-      alert('⛔ Kitchen is currently overloaded. Please wait a few minutes.');
-      return;
-    }
-
+    // 1. Validation Checks
+    if (isOrdering) return;
+    
+    // Check if cart is empty
     const orderItems = Object.keys(cart).map(id => {
       const item = menu.find(i => i.id === parseInt(id));
       if (!item) return null;
@@ -192,17 +219,20 @@ export default function CustomerMenu() {
         id: item.id,
         name: item.name,
         quantity: cart[id],
-        station_id: item.station_id || 1,
+        station_id: item.station_id || 1, // Default to 1 if missing
         price: item.price
       };
     }).filter(Boolean);
 
     if (orderItems.length === 0) return alert("Your cart is empty!");
 
+    // 2. Lock UI
+    setIsOrdering(true);
     const totalOrderPrice = orderItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
+    // 3. API Call
     axios.post(`${API_URL}/api/orders`, {
-      customer_name: `Table ${tableNumber}`,
+      customer_name: `Table ${tableNumber}`, // ✅ USES THE STICKY TABLE NUMBER
       items: orderItems,
       total_price: totalOrderPrice
     })
@@ -226,13 +256,16 @@ export default function CustomerMenu() {
     })
     .catch(err => {
       console.error("Order Place Error:", err);
-      alert("❌ Failed to place order. Ensure backend is running.");
+      // Detailed error for debugging, or simple message for user
+      const msg = err.response?.data?.error || "Failed to place order. Check connection.";
+      alert(`❌ ${msg}`);
+    })
+    .finally(() => {
+      setIsOrdering(false); // Unlock UI
     });
   };
 
   // --- PAYMENT LOGIC ---
-  
-  // ✅ FIX: Reset state when opening bill to ensure options show
   const openBill = () => {
       setPaymentMethod(null); 
       setShowBill(true);
@@ -240,15 +273,27 @@ export default function CustomerMenu() {
 
   const handlePaymentSelection = (method) => {
     setPaymentMethod(method);
-    // Tell backend the user's choice
+    // Tell backend user is attempting to pay
     if(activeOrder?.id) {
         axios.put(`${API_URL}/api/orders/${activeOrder.id}/request-payment`, { method })
-            .catch(err => console.log("Payment method update failed locally, continuing anyway"));
+            .catch(() => {}); 
     }
   };
 
   const confirmPayment = async () => {
-    alert("Manager Notified! Please wait for confirmation on this screen.");
+    if(!activeOrder?.id) return;
+
+    try {
+        // ✅ Notify Manager Dashboard
+        await axios.put(`${API_URL}/api/orders/${activeOrder.id}/request-payment`, { 
+            method: paymentMethod || 'UPI',
+            status: 'VERIFICATION_REQUESTED'
+        });
+        alert("✅ Manager Notified! Please stay on this screen while we verify.");
+    } catch (error) {
+        console.error("Payment notification failed", error);
+        alert("⚠️ Network Error: Please wave to the manager to confirm payment.");
+    }
   };
 
   const closeSession = async () => {
@@ -266,6 +311,7 @@ export default function CustomerMenu() {
     setActiveOrder(null);
   };
 
+  // Filter Menu Logic
   const filteredMenu = menu
     .filter(item => {
       const categoryMatch = selectedCategory === 'All' || item.category === selectedCategory;
@@ -275,10 +321,16 @@ export default function CustomerMenu() {
     .sort((a, b) => diningOrder.indexOf(a.category) - diningOrder.indexOf(b.category));
 
 
+  // ==================== RENDER: LOADING ====================
+  if (isLoading) {
+      return <div style={{...styles.container, display:'flex', justifyContent:'center', alignItems:'center'}}>
+          <h3>Loading Menu...</h3>
+      </div>;
+  }
+
   // ==================== RENDER: BILL POPUP ====================
   if (showBill && activeOrder && activeOrder.status === 'READY') {
     const total = activeOrder.total_price;
-    // UPI Deep Link Generation
     const upiLink = `upi://pay?pa=${MY_UPI_ID}&pn=${MY_NAME}&am=${total}&cu=INR`;
 
     return (
@@ -365,8 +417,8 @@ export default function CustomerMenu() {
             <div style={{
               height: '100%',
               width: activeOrder.status === 'PENDING' ? '30%' :
-                     activeOrder.status === 'PREPARING' ? '70%' :
-                     '100%',
+                      activeOrder.status === 'PREPARING' ? '70%' :
+                      '100%',
               background: getStatusColor(activeOrder.status),
               transition: 'width 1s ease'
             }} />
@@ -378,25 +430,13 @@ export default function CustomerMenu() {
               "Order is Ready! Please pay to complete."}
           </p>
 
-          {/* ✅ NEW: ESTIMATED TIME DISPLAY (Shown only in PREPARING) */}
           {activeOrder.status === 'PREPARING' && activeOrder.prep_time && (
-              <div style={{
-                  background: '#e3f2fd', 
-                  color: '#1565c0', 
-                  padding: '12px 20px', 
-                  borderRadius: '12px', 
-                  marginTop: '15px',
-                  fontWeight: 'bold',
-                  display: 'inline-block',
-                  fontSize: '1.1em',
-                  boxShadow: '0 4px 10px rgba(33, 150, 243, 0.2)'
-              }}>
+              <div style={styles.prepBadge}>
                   ⏱️ Ready in approx {activeOrder.prep_time} mins
               </div>
           )}
 
           {activeOrder.status === 'READY' && (
-            // ✅ FIX: Use openBill instead of direct setShowBill
             <button style={styles.payButton} onClick={openBill}>
               View Bill & Pay
             </button>
@@ -416,7 +456,7 @@ export default function CustomerMenu() {
   return (
     <div style={styles.container}>
       {isKitchenBusy() && (
-        <div style={{ background: '#ffebee', color: '#c62828', padding: '10px', textAlign: 'center', fontWeight: '600', position:'sticky', top:0, zIndex:101 }}>
+        <div style={styles.busyBanner}>
           ⚠️ Kitchen is busy. Ordering is temporarily paused.
         </div>
       )}
@@ -424,7 +464,6 @@ export default function CustomerMenu() {
         .menu-card:hover { transform: translateY(-4px); box-shadow: 0 12px 24px rgba(0,0,0,0.08) !important; }
         .add-btn:active { transform: scale(0.97); }
         .cat-btn:hover { background-color: #e8eaf6; color: #333; }
-        body { margin: 0; background-color: #fdfbf7; }
         ::-webkit-scrollbar { height: 4px; }
         ::-webkit-scrollbar-thumb { background: #d1d1d1; border-radius: 4px; }
       `}</style>
@@ -460,13 +499,9 @@ export default function CustomerMenu() {
               <img src={item.image_url || PLACEHOLDER_IMG} onError={(e) => e.target.src = PLACEHOLDER_IMG} alt={item.name} style={styles.foodImage} />
               <div style={{position: 'absolute', top: '10px', right: '10px', background:'white', padding:'4px', borderRadius:'4px', boxShadow:'0 2px 5px rgba(0,0,0,0.2)'}}>
                 {item.is_veg ? (
-                  <div style={{border:'2px solid #2ecc71', width:'14px', height:'14px', display:'flex', alignItems:'center', justifyContent:'center'}}>
-                    <div style={{background:'#2ecc71', width:'8px', height:'8px', borderRadius:'50%'}}></div>
-                  </div>
+                  <div style={styles.vegIcon}><div style={styles.vegDot}></div></div>
                 ) : (
-                  <div style={{border:'2px solid #c0392b', width:'14px', height:'14px', display:'flex', alignItems:'center', justifyContent:'center'}}>
-                    <div style={{background:'#c0392b', width:'8px', height:'8px', borderRadius:'50%'}}></div>
-                  </div>
+                  <div style={styles.nonVegIcon}><div style={styles.nonVegDot}></div></div>
                 )}
               </div>
             </div>
@@ -484,10 +519,10 @@ export default function CustomerMenu() {
                 <div style={styles.counter}>
                   <button onClick={() => removeFromCart(item.id)} style={styles.countBtn}>−</button>
                   <span style={{fontWeight:'600', fontSize:'1em'}}>{cart[item.id]}</span>
-                  <button onClick={() => addToCart(item)} disabled={isKitchenBusy()} style={{ ...styles.countBtn, opacity: isKitchenBusy() ? 0.5 : 1 }}>+</button>
+                  <button onClick={() => addToCart(item)} style={{ ...styles.countBtn }}>+</button>
                 </div>
               ) : (
-                <button onClick={() => addToCart(item)} disabled={isKitchenBusy()} style={{ ...(addedItem === item.id ? styles.addedButton : styles.addButton), opacity: isKitchenBusy() ? 0.5 : 1 }} className="add-btn">
+                <button onClick={() => addToCart(item)} style={{ ...(addedItem === item.id ? styles.addedButton : styles.addButton) }} className="add-btn">
                   {addedItem === item.id ? "Added! ✓" : "Add"}
                 </button>
               )}
@@ -505,7 +540,7 @@ export default function CustomerMenu() {
             <span style={{fontSize: '1.2em', fontWeight: '600'}}>₹{totalPrice.toFixed(0)}</span>
           </div>
           <div style={{display:'flex', alignItems:'center', fontWeight:'600', fontSize:'1em', letterSpacing:'0.5px'}}>
-            VIEW ORDER <span style={{marginLeft:'8px'}}>➔</span>
+            {isOrdering ? 'PROCESSING...' : 'VIEW ORDER'} <span style={{marginLeft:'8px'}}>{isOrdering ? '⏳' : '➔'}</span>
           </div>
         </div>
       )}
@@ -539,10 +574,20 @@ const styles = {
   counter: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#263238', borderRadius: '8px', padding: '6px 10px', color: 'white' },
   countBtn: { background: 'transparent', border: 'none', color: 'white', fontWeight: '400', fontSize: '1.4em', cursor: 'pointer', padding: '0 8px', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight:'1' },
   floatingCart: { position: 'fixed', bottom: '25px', left: '25px', right: '25px', background: '#263238', color: 'white', padding: '16px 25px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 10px 30px rgba(0,0,0,0.15)', cursor: 'pointer', animation: 'slideUp 0.4s ease-out', zIndex: 200 },
+  
+  // Status & Icons
+  vegIcon: { border: '2px solid #2ecc71', width: '14px', height: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  vegDot: { background: '#2ecc71', width: '8px', height: '8px', borderRadius: '50%' },
+  nonVegIcon: { border: '2px solid #c0392b', width: '14px', height: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  nonVegDot: { background: '#c0392b', width: '8px', height: '8px', borderRadius: '50%' },
+  busyBanner: { background: '#ffebee', color: '#c62828', padding: '10px', textAlign: 'center', fontWeight: '600', position: 'sticky', top: 0, zIndex: 101 },
+
+  // Status Screen
   statusContainer: { padding: '40px', textAlign: 'center', fontFamily: 'sans-serif', height: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', background: '#fdfbf7' },
   statusCard: { margin: '30px auto', padding: '40px', maxWidth: '380px', borderRadius: '20px', background: 'white', boxShadow: '0 20px 40px rgba(0,0,0,0.05)', border:'1px solid #f0f0f0' },
   payButton: { background: '#333', color: 'white', border: 'none', padding: '16px 32px', borderRadius: '30px', fontSize: '1em', fontWeight: '600', cursor: 'pointer', marginTop: '20px', boxShadow: '0 5px 15px rgba(0,0,0,0.1)' },
-  
+  prepBadge: { background: '#e3f2fd', color: '#1565c0', padding: '12px 20px', borderRadius: '12px', marginTop: '15px', fontWeight: 'bold', display: 'inline-block', fontSize: '1.1em', boxShadow: '0 4px 10px rgba(33, 150, 243, 0.2)' },
+
   // BILL MODAL
   billOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
   billCard: { background: '#fff', width: '90%', maxWidth: 400, padding: 25, fontFamily: 'monospace', borderRadius: '12px', boxShadow: '0 10px 30px rgba(0,0,0,0.3)' },

@@ -6,12 +6,10 @@ import axios from 'axios';
 const API_URL = 'https://restoscan-cloud-kitchen-load-management.onrender.com/api/auth/register';
 
 export default function Signup() {
-  // ✅ Added 'role' to state (Default is 'admin')
   const [formData, setFormData] = useState({ 
     username: '', 
     password: '', 
-    role: 'admin',
-    restaurantName: '' // ✅ New Field: Name of your Business 
+    role: 'admin' 
   });
   
   const [error, setError] = useState('');
@@ -24,11 +22,10 @@ export default function Signup() {
     setLoading(true);
 
     try {
-      // Now sending username, password, AND role
       const res = await axios.post(API_URL, formData);
       if (res.data.success) {
         alert('✅ Account Created! Please login.');
-        navigate('/admin-login');
+        navigate('/login');
       }
     } catch (err) {
       console.error(err);
@@ -48,16 +45,6 @@ export default function Signup() {
         </div>
 
         <form onSubmit={handleSubmit} style={{display:'flex', flexDirection:'column', gap:15}}>
-
-          {/* ✅ RESTAURANT NAME INPUT */}
-          <input
-            type="text"
-            placeholder="Restaurant Name (e.g. Joe's Pizza)"
-            value={formData.restaurantName}
-            onChange={e => setFormData({ ...formData, restaurantName: e.target.value })}
-            style={styles.input}
-            required
-          />
           {/* USERNAME */}
           <input
             placeholder="Choose Username"
@@ -77,7 +64,7 @@ export default function Signup() {
             required
           />
 
-          {/* ✅ ROLE SELECTOR (Fixes Database Error) */}
+          {/* ROLE SELECTOR */}
           <div style={{textAlign:'left'}}>
               <label style={{color:'#ccc', fontSize:'0.9em', marginLeft:'5px'}}>Select Role:</label>
               <select 
@@ -98,7 +85,8 @@ export default function Signup() {
         </form>
 
         <p style={{textAlign:'center', color:'#888', marginTop: 20, fontSize:'0.9em'}}>
-          Already have an account? <Link to="/admin-login" style={{color:'#2ecc71', textDecoration:'none', fontWeight:'bold'}}>Login here</Link>
+          {/* ✅ FIXED: Point to the main Login page */}
+          Already have an account? <Link to="/login" style={{color:'#2ecc71', textDecoration:'none', fontWeight:'bold'}}>Login here</Link>
         </p>
       </div>
     </div>

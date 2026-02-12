@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 
-// ✅ Cloud Backend URL
+// ✅ UPDATED: Now pointing to your Cloud Server
 const API_URL = 'https://restoscan-cloud-kitchen-load-management.onrender.com/api/auth/login';
 
 export default function Login({ onLogin }) {
@@ -19,30 +19,12 @@ export default function Login({ onLogin }) {
     try {
       const res = await axios.post(API_URL, formData);
       if (res.data.success) {
-        // ✅ CRITICAL UPDATE: Extract Role AND Restaurant ID
-        const { role, restaurant_id } = res.data.user;
-
-        // 1. Save Auth Token
         localStorage.setItem('adminAuth', 'true');
-        
-        // 2. Save User Role
-        localStorage.setItem('userRole', role);
-
-        // 3. ✅ SAVE RESTAURANT ID (This fixes the "Old Data" issue)
-        // If no ID is returned, default to '1' (RestoScan HQ)
-        localStorage.setItem('restaurantId', restaurant_id || '1');
-
+        localStorage.setItem('userRole', res.data.user.role);
         onLogin(true);
-
-        // 4. Redirect based on Role
-        if (role === 'kitchen') {
-            navigate('/kitchen');
-        } else {
-            navigate('/admin');
-        }
+        navigate('/admin');
       }
     } catch (err) {
-      console.error(err);
       setError(err.response?.data?.error || 'Invalid credentials');
     } finally {
       setLoading(false);
@@ -54,8 +36,8 @@ export default function Login({ onLogin }) {
       <div style={styles.card}>
         <div style={{textAlign:'center', marginBottom: 20}}>
             <h1 style={{margin: 0, fontSize:'2em'}}>🔐</h1>
-            <h2 style={{color:'white', margin:'10px 0'}}>Login</h2>
-            <p style={{color:'#888', fontSize:'0.9em'}}>RestoScan Management</p>
+            <h2 style={{color:'white', margin:'10px 0'}}>Admin Login</h2>
+            <p style={{color:'#888', fontSize:'0.9em'}}>RestoScan Management Console</p>
         </div>
 
         <form onSubmit={handleSubmit} style={{display:'flex', flexDirection:'column', gap:15}}>
@@ -93,14 +75,14 @@ export default function Login({ onLogin }) {
 const styles = {
   container: { 
     height: '100vh', 
-    background: '#111', 
+    background: '#111', // Deep Black
     display: 'flex', 
     justifyContent: 'center', 
     alignItems: 'center',
     fontFamily: '"Segoe UI", sans-serif'
   },
   card: { 
-    background: '#222', 
+    background: '#222', // Dark Grey Card
     padding: '40px', 
     borderRadius: '16px', 
     width: '380px',
@@ -121,7 +103,7 @@ const styles = {
   button: { 
     width: '100%', 
     padding: '14px', 
-    background: '#e74c3c', 
+    background: '#e74c3c', // Red/Orange Accent to match Admin
     color: 'white', 
     border: 'none', 
     borderRadius: '8px', 

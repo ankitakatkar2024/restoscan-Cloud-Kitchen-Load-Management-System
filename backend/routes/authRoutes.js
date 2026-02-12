@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
 
-// LOGIN
+// 1. LOGIN (General)
 router.post('/login', async (req, res) => {
     const { username, password } = req.body;
 
@@ -15,11 +15,20 @@ router.post('/login', async (req, res) => {
         if (users.length === 0) {
             return res.status(401).json({
                 success: false,
-                error: 'Invalid Username or Password'
+                error: 'Invalid Credentials'
             });
         }
 
         const user = users[0];
+        
+        // Prevent Kitchen Staff from accessing Admin Dashboard
+        if (user.role === 'kitchen') {
+             return res.status(403).json({
+                success: false,
+                error: 'Kitchen staff cannot access Manager Dashboard'
+            });
+        }
+
         res.json({
             success: true,
             message: 'Login Successful',
@@ -35,7 +44,7 @@ router.post('/login', async (req, res) => {
     }
 });
 
-// REGISTER
+// 2. REGISTER (Create New Users)
 router.post('/register', async (req, res) => {
     const { username, password, role } = req.body;
 
@@ -59,9 +68,10 @@ router.post('/register', async (req, res) => {
             });
         }
 
+        // Default to 'admin' if not specified
         await db.query(
             'INSERT INTO users (username, password, role) VALUES (?, ?, ?)',
-            [username, password, role || 'manager']
+            [username, password, role || 'admin']
         );
 
         res.status(201).json({
@@ -74,20 +84,41 @@ router.post('/register', async (req, res) => {
     }
 });
 
-// ✅ NEW: Specific route for Chef/Admin Login (Secured)
-router.post('/admin-login', (req, res) => {
+// 3. KITCHEN LOGIN (For Chefs) - ✅ FIXED
+router.post('/admin-login', async (req, res) => {
   const { username, password } = req.body;
 
-  // 🔒 SECURE HARDCODED CREDENTIALS
-  // In a real app, you would check this against a database table 'admins'
-  if (username === 'admin' && password === 'chef123') {
-    res.json({ 
-      success: true, 
-      token: 'secure-chef-token-999', // Special token for chefs
-      role: 'chef' 
-    });
-  } else {
-    res.status(401).json({ success: false, message: '❌ Access Denied: Chefs Only' });
+  try {
+      // 1. Check Hardcoded Backdoor (Optional, keeps your old logic working)
+      if (username === 'admin' && password === 'chef123') {
+           return res.json({ success: true, token: 'secure-chef-hardcoded', role: 'kitchen' });
+      }
+
+      // 2. Check Database (Connects to Signup Page)
+      const [users] = await db.query(
+          'SELECT * FROM users WHERE username = ? AND password = ?',
+          [username, password]
+      );
+
+      if (users.length === 0) {
+          return res.status(401).json({ success: false, message: 'Invalid Credentials' });
+      }
+
+      const user = users[0];
+
+      // 3. Verify Role
+      if (user.role !== 'kitchen') {
+          return res.status(403).json({ success: false, message: 'Only Kitchen Staff can access this panel' });
+      }
+
+      res.json({ 
+        success: true, 
+        token: `secure-chef-token-${user.id}`, 
+        role: 'kitchen' 
+      });
+
+  } catch (err) {
+      res.status(500).json({ success: false, error: err.message });
   }
 });
 
