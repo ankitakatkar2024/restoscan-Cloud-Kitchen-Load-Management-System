@@ -30,22 +30,24 @@ export default function Kitchen() {
     socketRef.current = io(API_URL);
 
     // ---- ORDER CREATED (Socket Fix) ----
-   // ✅ Fix: Add this inside your useEffect Socket listener
-socketRef.current.on('order_created', (newOrder) => {
-    console.log("New Ticket Received:", newOrder);
-    setOrders(prev => {
-        // Prevent duplicates
-        if (prev.some(o => o.id === newOrder.id)) return prev;
-        
-        // Ensure items are parsed immediately for the UI
-        const formattedOrder = {
-            ...newOrder,
-            items: typeof newOrder.items === 'string' ? JSON.parse(newOrder.items) : newOrder.items,
-            created_at: new Date().toISOString() // Prevents NaN:NaN time error
-        };
-        return [formattedOrder, ...prev];
+    // ✅ Fix: Ensures the ticket shows FULL info instantly without refresh
+    socketRef.current.on('order_created', (newOrder) => {
+        console.log("New Ticket Received:", newOrder);
+        setOrders(prev => {
+            if (prev.some(o => o.id === newOrder.id)) return prev;
+            
+            // Format the incoming socket order so the UI can read it immediately
+            const formattedOrder = {
+                ...newOrder,
+                // Handle cases where backend sends items as a string vs object
+                items: typeof newOrder.items === 'string' ? JSON.parse(newOrder.items) : newOrder.items,
+                // Ensure a valid date string exists to avoid NaN:NaN error
+                created_at: newOrder.created_at || new Date().toISOString(),
+                status: newOrder.status || 'PENDING'
+            };
+            return [formattedOrder, ...prev];
+        });
     });
-});
 
     // ---- STATUS UPDATED ----
     socketRef.current.on('order_status_updated', ({ id, status, prep_time }) => {
@@ -108,11 +110,11 @@ socketRef.current.on('order_created', (newOrder) => {
 
   /* ================= HELPERS (The Logic Fixes) ================= */
 
-  // ✅ FIX: "NaN:NaN" Time Logic
+  // ✅ FIX: Prevents "NaN:NaN" by handling date parsing safely
   const getTimeElapsed = (created) => {
     if (!created) return "00:00";
     const startTime = new Date(created).getTime();
-    if (isNaN(startTime)) return "00:00"; // Safety fallback
+    if (isNaN(startTime)) return "00:00";
 
     const diff = Math.floor((Date.now() - startTime) / 1000);
     const mm = String(Math.floor(diff / 60)).padStart(2, '0');
@@ -120,24 +122,21 @@ socketRef.current.on('order_created', (newOrder) => {
     return `${mm}:${ss}`;
   };
 
-  // ✅ FIX: "Empty Items" Logic
-// ✅ Replace your getItems helper with this one
-const getItems = (items) => {
-  try {
-    if (!items) return [];
-    // If it's already an array (Live Socket data), return it
-    if (Array.isArray(items)) return items;
-    // If it's a string (Database data on refresh), parse it
-    if (typeof items === 'string') {
-      const parsed = JSON.parse(items);
-      return Array.isArray(parsed) ? parsed : [];
+  // ✅ FIX: Ensures items show up whether they are live (Socket) or from DB (Refresh)
+  const getItems = (items) => {
+    try {
+      if (!items) return [];
+      if (Array.isArray(items)) return items;
+      if (typeof items === 'string') {
+        const parsed = JSON.parse(items);
+        return Array.isArray(parsed) ? parsed : [];
+      }
+      return [];
+    } catch (e) {
+      console.error("Item Parsing Error:", e);
+      return [];
     }
-    return [];
-  } catch (e) {
-    console.error("Item Parsing Error:", e);
-    return [];
-  }
-};
+  };
 
   const isLate = (created) => (Date.now() - new Date(created)) / 60000 > 20;
 

@@ -7,6 +7,7 @@ import QRCode from "react-qr-code";
 // ✅ CONFIGURATION
 const API_URL = 'https://restoscan-cloud-kitchen-load-management.onrender.com';
 const MY_UPI_ID = "ankitakatkar2004@oksbi"; 
+const notifySound = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3'); // You can replace this with any URL
 const MY_NAME = "RestoScan Kitchen";
 const PLACEHOLDER_IMG = 'https://placehold.co/150';
 
@@ -137,51 +138,64 @@ useEffect(() => {
   }, [searchParams]);
 
   // --- 2. SOCKET CONNECTION ---
-  useEffect(() => {
-    socketRef.current = io(API_URL);
+// --- 2. SOCKET CONNECTION ---
 
-    // Listener: Order Status Updates
-    socketRef.current.on('order_status_updated', ({ id, status, prep_time }) => {
-      setActiveOrder(prev => {
-        // If order completed, clear session
-        if (status === 'COMPLETED' && prev && prev.id === id) {
-             localStorage.removeItem('activeOrderId');
-             setShowBill(false);
-             return null;
-        }
+useEffect(() => {
+  socketRef.current = io(API_URL);
 
-        if (!prev || prev.id !== id) return prev;
-        
-        // Vibrate phone on status change
-        if ((status === 'PREPARING' || status === 'READY') && navigator.vibrate) {
-          navigator.vibrate([200, 100, 200]);
-        }
-        return { ...prev, status, prep_time };
-      });
+  // Keep your force_table_change listener
+  socketRef.current.on('force_table_change', ({ table }) => {
+      console.log("Remote Update Received: Switching to Table", table);
+      setTableNumber(table);
+      localStorage.setItem('myTableNum', table);
+  });
+
+  // ✅ UPDATED LISTENER WITH SOUND AND VIBRATION
+  socketRef.current.on('order_status_updated', ({ id, status, prep_time }) => {
+    setActiveOrder(prev => {
+      if (!prev || prev.id !== id) return prev;
+
+      // ✅ Play sound when status changes (e.g., PENDING -> PREPARING or PREPARING -> READY)
+      if (status !== prev.status) {
+          notifySound.play().catch(e => console.log("Audio play failed:", e));
+          
+          // Optional: Add vibration for mobile devices
+          if (navigator.vibrate) {
+              navigator.vibrate([200, 100, 200]);
+          }
+      }
+
+      if (status === 'COMPLETED') {
+           localStorage.removeItem('activeOrderId');
+           setShowBill(false);
+           return null;
+      }
+      
+      return { ...prev, status, prep_time };
     });
+  });
 
-    // Listener: Payment Updates
-    socketRef.current.on('payment_updated', ({ id, payment_status }) => {
-      setActiveOrder(prev => {
-        if (prev && prev.id === id && payment_status === 'PAID') {
-            return { ...prev, payment_status };
-        }
-        return prev;
-      });
+  // Keep your other listeners
+  socketRef.current.on('payment_updated', ({ id, payment_status }) => {
+    setActiveOrder(prev => {
+      if (prev && prev.id === id && payment_status === 'PAID') {
+          return { ...prev, payment_status };
+      }
+      return prev;
     });
+  });
 
-    // Listener: Kitchen Load Updates
-    socketRef.current.on('station_load_update', ({ stationId, currentLoad, maxLoad }) => {
-      setStationLoad(prev => ({
-        ...prev,
-        [stationId]: { currentLoad, maxLoad }
-      }));
-    });
+  socketRef.current.on('station_load_update', ({ stationId, currentLoad, maxLoad }) => {
+    setStationLoad(prev => ({
+      ...prev,
+      [stationId]: { currentLoad, maxLoad }
+    }));
+  });
 
-    return () => {
-      if (socketRef.current) socketRef.current.disconnect();
-    };
-  }, []);
+  return () => {
+    if (socketRef.current) socketRef.current.disconnect();
+  };
+}, [tableNumber]); // Added tableNumber to dependency to ensure socket has context if needed
 
   // --- HELPERS ---
   const isKitchenBusy = () => {
