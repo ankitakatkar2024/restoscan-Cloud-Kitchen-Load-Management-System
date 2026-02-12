@@ -20,22 +20,32 @@ export default function CustomerMenu() {
   // 3. If URL has no table, it loads the last saved table from storage.
   // 4. Defaults to '1' only if nothing else exists.
 // ✅ Replace your tableNumber state with this exact logic
+// ✅ DYNAMIC TABLE SWITCHING LOGIC
 const [tableNumber, setTableNumber] = useState(() => {
+    // Check URL first - this is the "Source of Truth" for a new scan
     const params = new URLSearchParams(window.location.search);
     const urlTable = params.get('table');
     
-    // Priority 1: If there is a number in the URL, USE IT and SAVE IT
     if (urlTable) {
+        // If a new number is in the URL, overwrite the old memory immediately
         localStorage.setItem('myTableNum', urlTable);
         return urlTable;
     }
-    // Priority 2: If no URL param, check if we have one saved in memory
+    
+    // If no URL param, use the last scanned table from memory
     const savedTable = localStorage.getItem('myTableNum');
-    if (savedTable) return savedTable;
-
-    // Priority 3: Absolute fallback
-    return '1';
+    return savedTable || '1'; // Default to 1 if it's a direct link visit
 });
+
+// ✅ WATCH FOR URL CHANGES
+useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlTable = params.get('table');
+    if (urlTable && urlTable !== tableNumber) {
+        setTableNumber(urlTable);
+        localStorage.setItem('myTableNum', urlTable);
+    }
+}, [searchParams, tableNumber]);
 
   // --- STATE MANAGEMENT ---
   const [menu, setMenu] = useState([]);

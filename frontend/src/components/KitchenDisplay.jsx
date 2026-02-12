@@ -30,17 +30,22 @@ export default function Kitchen() {
     socketRef.current = io(API_URL);
 
     // ---- ORDER CREATED (Socket Fix) ----
-    socketRef.current.on('order_created', (newOrder) => {
-      setOrders(prev => {
+   // ✅ Fix: Add this inside your useEffect Socket listener
+socketRef.current.on('order_created', (newOrder) => {
+    console.log("New Ticket Received:", newOrder);
+    setOrders(prev => {
+        // Prevent duplicates
         if (prev.some(o => o.id === newOrder.id)) return prev;
-        // Ensure new orders have a timestamp to prevent NaN:NaN
+        
+        // Ensure items are parsed immediately for the UI
         const formattedOrder = {
-          ...newOrder,
-          created_at: newOrder.created_at || new Date().toISOString()
+            ...newOrder,
+            items: typeof newOrder.items === 'string' ? JSON.parse(newOrder.items) : newOrder.items,
+            created_at: new Date().toISOString() // Prevents NaN:NaN time error
         };
         return [formattedOrder, ...prev];
-      });
     });
+});
 
     // ---- STATUS UPDATED ----
     socketRef.current.on('order_status_updated', ({ id, status, prep_time }) => {
