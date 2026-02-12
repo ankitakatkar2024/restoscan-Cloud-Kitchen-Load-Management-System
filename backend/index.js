@@ -96,7 +96,9 @@ app.use(express.static(buildPath));
 
 // 2. "Catch-All" route: Any URL that is NOT an API call is sent to index.html
 // ✅ This is the correct syntax for catch-all routes now
-app.get('(.*)', (req, res) => {
+// ✅ Correct Syntax for Express 5 / Node 22: Named Wildcard
+app.get('/:any*', (req, res) => {
+    // Check if the request is NOT for an API route
     if (!req.path.startsWith('/api')) {
         res.sendFile(path.join(buildPath, 'index.html'));
     }
