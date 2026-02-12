@@ -8,7 +8,7 @@ require('dotenv').config();
 // ---- 1. INITIALIZE DATABASE ----
 const db = require('./config/db'); 
 
-// ✅ Redis is optional to prevent cloud crashes
+// ✅ FIX: Make Redis Optional
 try {
     require('./config/redis'); 
     console.log("✅ Redis config loaded.");
@@ -44,7 +44,7 @@ app.set('socketio', io);
 
 io.on('connection', (socket) => {
     console.log('🟢 Socket connected:', socket.id);
-
+    
     // ✅ Listen for remote table changes from QR Factory
     socket.on('force_table_change', (data) => {
         io.emit('force_table_change', data);
@@ -90,18 +90,14 @@ app.post('/api/reset-system', async (req, res) => {
 
 // ---- 7. ✅ CRITICAL FIX: SPA ROUTING & STATIC FILES ----
 // 1. Tell Express where your frontend build folder is located.
-// Change 'dist' to 'build' if you are not using Vite.
+// Note: Ensure this path correctly points to your 'dist' or 'build' folder.
 const buildPath = path.join(__dirname, '../client/dist'); 
 app.use(express.static(buildPath));
 
-// 2. "Catch-All" route: Any URL that is NOT an API call is sent to index.html
-// ✅ This is the correct syntax for catch-all routes now
-// ✅ Correct Syntax for Express 5 / Node 22: Named Wildcard
-app.get('/:any*', (req, res) => {
-    // Check if the request is NOT for an API route
-    if (!req.path.startsWith('/api')) {
-        res.sendFile(path.join(buildPath, 'index.html'));
-    }
+// 2. ✅ REGEX CATCH-ALL: This avoids the "PathError" in Node v22.
+// It says: "Match everything EXCEPT paths that start with /api"
+app.get(/^\/(?!api).*/, (req, res) => {
+    res.sendFile(path.join(buildPath, 'index.html'));
 });
 
 // ---- 8. HEALTH CHECK ----
