@@ -95,7 +95,8 @@ const buildPath = path.join(__dirname, '../client/dist');
 app.use(express.static(buildPath));
 
 // 2. "Catch-All" route: Any URL that is NOT an API call is sent to index.html
-app.get('*', (req, res) => {
+// ✅ This is the correct syntax for catch-all routes now
+app.get('(.*)', (req, res) => {
     if (!req.path.startsWith('/api')) {
         res.sendFile(path.join(buildPath, 'index.html'));
     }
