@@ -2,13 +2,12 @@ const express = require('express');
 const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
-const path = require('path'); // ✅ Required for SPA routing
 require('dotenv').config();
 
 // ---- 1. INITIALIZE DATABASE ----
 const db = require('./config/db'); 
 
-// ✅ FIX: Make Redis Optional
+// ✅ Redis optional check: Prevents crash if Redis is down
 try {
     require('./config/redis'); 
     console.log("✅ Redis config loaded.");
@@ -27,7 +26,7 @@ const server = http.createServer(app);
 
 // ---- 3. MIDDLEWARE ----
 app.use(cors({
-    origin: '*', 
+    origin: '*', // Allows your separate frontend service to communicate with this API
     methods: ['GET', 'POST', 'PUT', 'DELETE']
 }));
 app.use(express.json());
@@ -45,7 +44,7 @@ app.set('socketio', io);
 io.on('connection', (socket) => {
     console.log('🟢 Socket connected:', socket.id);
     
-    // ✅ Listen for remote table changes from QR Factory
+    // Listen for remote table changes from QR Factory
     socket.on('force_table_change', (data) => {
         io.emit('force_table_change', data);
     });
@@ -88,31 +87,20 @@ app.post('/api/reset-system', async (req, res) => {
     }
 });
 
-// ---- 7. ✅ CRITICAL FIX: SPA ROUTING & STATIC FILES ----
-// 1. Tell Express where your frontend build folder is located.
-// Note: Ensure this path correctly points to your 'dist' or 'build' folder.
-const buildPath = path.join(__dirname, '../client/dist'); 
-app.use(express.static(buildPath));
-
-// 2. ✅ REGEX CATCH-ALL: This avoids the "PathError" in Node v22.
-// It says: "Match everything EXCEPT paths that start with /api"
-app.get(/^\/(?!api).*/, (req, res) => {
-    res.sendFile(path.join(buildPath, 'index.html'));
-});
-
-// ---- 8. HEALTH CHECK ----
+// ---- 7. HEALTH CHECK ----
+// Essential for Render to know your service is alive
 app.get('/health', async (req, res) => {
     try {
         await db.query('SELECT 1');
-        res.json({ status: 'OK', message: 'Server & DB Healthy' });
+        res.json({ status: 'OK', message: 'Backend API & Database Healthy' });
     } catch (err) {
         console.error("Health Check Failed:", err);
         res.status(500).json({ status: 'DB_ERROR', error: err.message });
     }
 });
 
-// ---- 9. START SERVER ----
+// ---- 8. START SERVER ----
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Server running on Port ${PORT}`);
+    console.log(`✅ Backend API running on Port ${PORT}`);
 });
