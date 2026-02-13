@@ -23,28 +23,30 @@ export default function CustomerMenu() {
 // ✅ Replace your tableNumber state with this exact logic
 // ✅ DYNAMIC TABLE SWITCHING LOGIC
 // ✅ IMPROVED DYNAMIC TABLE SWITCHING
-const [tableNumber, setTableNumber] = useState(() => {
-  const params = new URLSearchParams(window.location.search);
-  const urlTable = params.get('table');
+// ✅ Replace your tableNumber state with this
+  const [tableNumber, setTableNumber] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlTable = params.get('table');
 
-  if (urlTable) {
-    localStorage.setItem('myTableNum', urlTable);
-    return urlTable;
-  }
+    if (urlTable) {
+      localStorage.setItem('myTableNum', urlTable);
+      return urlTable;
+    }
 
-  const savedTable = localStorage.getItem('myTableNum');
-  return savedTable || '1';
-});
+    const savedTable = localStorage.getItem('myTableNum');
+    return savedTable || '1';
+  });
 
 // ✅ WATCH FOR URL CHANGES
-useEffect(() => {
-  const urlTable = searchParams.get('table');
-  if (urlTable && urlTable !== tableNumber) {
-    setTableNumber(urlTable);
-    localStorage.setItem('myTableNum', urlTable);
-    setCart({});
-  }
-}, [searchParams]);
+// ✅ Add this block to watch for URL changes
+  useEffect(() => {
+    const urlTable = searchParams.get('table');
+    if (urlTable && urlTable !== tableNumber) {
+      setTableNumber(urlTable);
+      localStorage.setItem('myTableNum', urlTable);
+      setCart({}); // Optional: clears cart when table changes
+    }
+  }, [searchParams]);
 
 
   // --- STATE MANAGEMENT ---
@@ -134,8 +136,7 @@ useEffect(() => {
     return () => {
         document.body.style.backgroundColor = ''; 
     };
-  }, [searchParams]);
-
+  }, [tableNumber]);
   // --- 2. SOCKET CONNECTION ---
 // --- 2. SOCKET CONNECTION ---
 
@@ -143,10 +144,13 @@ useEffect(() => {
   socketRef.current = io(API_URL);
 
   // Keep your force_table_change listener
+ // ✅ Update the force_table_change listener inside your socket useEffect
   socketRef.current.on('force_table_change', ({ table }) => {
-      console.log("Remote Update Received: Switching to Table", table);
+      console.log("Remote Update: Switching to Table", table);
       setTableNumber(table);
       localStorage.setItem('myTableNum', table);
+      // This line forces the URL to update so the browser reflects the new table
+      setSearchParams({ table }); 
   });
 
   // ✅ UPDATED LISTENER WITH SOUND AND VIBRATION
