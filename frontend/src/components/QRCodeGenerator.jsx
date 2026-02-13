@@ -1,17 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
 import io from 'socket.io-client';
-import { Link, useNavigate } from 'react-router-dom'; // ✅ Added Link & useNavigate
+import { Link, useNavigate } from 'react-router-dom';
 
 // ✅ CONFIGURATION
 const API_URL = 'https://restoscan-cloud-kitchen-load-management.onrender.com';
 
+// 🔴 ACTION REQUIRED: Replace this with your actual FRONTEND URL 
+// Example: "https://restoscan-frontend.onrender.com"
+const FRONTEND_URL = "https://restoscan-cloud-kitchen-load-management.onrender.com"; 
+
 export default function QRCodeGenerator() {
   const socketRef = useRef(null);
   const navigate = useNavigate();
-  
-  // Base URL for the menu links
-  const baseUrl = "https://restoscan-cloud-kitchen-load-management.onrender.com";
   const [tableNum, setTableNum] = useState(1);
   
   // ✅ Initialize Socket Connection
@@ -32,7 +33,8 @@ export default function QRCodeGenerator() {
     }
   };
 
-  const menuLink = `${baseUrl}/menu?table=${tableNum}`;
+  // ✅ FIXED: Points to the Frontend Menu Page
+  const menuLink = `${FRONTEND_URL}/menu?table=${tableNum}`;
 
   const handlePrint = () => {
     window.print();
@@ -46,7 +48,6 @@ export default function QRCodeGenerator() {
 
   return (
     <div style={styles.container}>
-      {/* ✅ UPDATED NAVIGATION (Using Link component) */}
       <header style={styles.navBar} className="no-print">
         <div style={styles.navLinks}>
              <Link to="/kitchen" style={styles.navItem}>👨‍🍳 Kitchen</Link>
@@ -60,9 +61,8 @@ export default function QRCodeGenerator() {
       <div style={styles.card}>
         <div className="no-print">
             <h1 style={{ color: '#fff', margin: '0', fontSize: '1.8em' }}>📊 QR Code Factory</h1>
-            <p style={{ color: '#aaa', marginBottom: '25px', fontSize: '0.9em' }}>Generate and print codes for your tables.</p>
+            <p style={{ color: '#aaa', marginBottom: '25px', fontSize: '0.9em' }}>Generate codes for your tables.</p>
 
-            {/* CONTROLS */}
             <div style={styles.controlBox}>
               <label style={styles.label}>Select Table Number:</label>
               <input
@@ -83,7 +83,6 @@ export default function QRCodeGenerator() {
           </div>
           
           <div style={styles.qrWrapper}>
-            {/* ✅ Correct library usage */}
             <QRCodeCanvas value={menuLink} size={200} level="H" includeMargin={true} />
           </div>
 
