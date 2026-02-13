@@ -5,6 +5,9 @@ import { useNavigate, Link } from 'react-router-dom'; // ✅ Import Link
 
 const API_URL = 'https://restoscan-cloud-kitchen-load-management.onrender.com';
 
+// ✅ 1. DEFINE THE NOTIFICATION SOUND
+const dingSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+
 export default function Kitchen() {
   const [orders, setOrders] = useState([]);
   const [time, setTime] = useState(new Date());
@@ -33,6 +36,11 @@ export default function Kitchen() {
     // ✅ Fix: Ensures the ticket shows FULL info instantly without refresh
     socketRef.current.on('order_created', (newOrder) => {
         console.log("New Ticket Received:", newOrder);
+
+        // ✅ 2. TRIGGER THE "DING" SOUND
+        // We wrap it in a catch to avoid errors if the browser blocks autoplay
+        dingSound.play().catch(e => console.warn("Audio blocked by browser until first interaction."));
+        
         setOrders(prev => {
             if (prev.some(o => o.id === newOrder.id)) return prev;
             
