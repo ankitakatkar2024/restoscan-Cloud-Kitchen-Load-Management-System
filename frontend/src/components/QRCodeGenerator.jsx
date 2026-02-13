@@ -3,19 +3,21 @@ import { QRCodeCanvas } from 'qrcode.react';
 import io from 'socket.io-client';
 import { Link, useNavigate } from 'react-router-dom';
 
-// ✅ CONFIGURATION
+// ✅ BACKEND: Used for Socket.io and API calls
 const API_URL = 'https://restoscan-cloud-kitchen-load-management.onrender.com';
 
-// 🔴 ACTION REQUIRED: Replace this with your actual FRONTEND URL 
-// Example: "https://restoscan-frontend.onrender.com"
-const FRONTEND_URL = "https://restoscan-cloud-kitchen-load-management.onrender.com"; 
+/** * 🔴 CRITICAL FIX: 
+ * Your current code uses the Backend URL for the QR code.
+ * You MUST replace this with your FRONTEND (React) URL.
+ * Example: "https://restoscan-app.onrender.com"
+ */
+const FRONTEND_URL = "https://restoscan-cloud-kitchen-load-management-h021.onrender.com";
 
 export default function QRCodeGenerator() {
   const socketRef = useRef(null);
   const navigate = useNavigate();
   const [tableNum, setTableNum] = useState(1);
   
-  // ✅ Initialize Socket Connection
   useEffect(() => {
     socketRef.current = io(API_URL);
     return () => {
@@ -23,17 +25,15 @@ export default function QRCodeGenerator() {
     };
   }, []);
 
-  // ✅ Broadcaster: Updates other screens instantly
   const handleTableChange = (e) => {
     const newNum = e.target.value;
     setTableNum(newNum);
-    
     if (socketRef.current) {
         socketRef.current.emit('force_table_change', { table: newNum });
     }
   };
 
-  // ✅ FIXED: Points to the Frontend Menu Page
+  // ✅ This link now points to your website, not your server
   const menuLink = `${FRONTEND_URL}/menu?table=${tableNum}`;
 
   const handlePrint = () => {
@@ -61,7 +61,7 @@ export default function QRCodeGenerator() {
       <div style={styles.card}>
         <div className="no-print">
             <h1 style={{ color: '#fff', margin: '0', fontSize: '1.8em' }}>📊 QR Code Factory</h1>
-            <p style={{ color: '#aaa', marginBottom: '25px', fontSize: '0.9em' }}>Generate codes for your tables.</p>
+            <p style={{ color: '#aaa', marginBottom: '25px', fontSize: '0.9em' }}>Generate and print codes for your tables.</p>
 
             <div style={styles.controlBox}>
               <label style={styles.label}>Select Table Number:</label>
@@ -75,7 +75,6 @@ export default function QRCodeGenerator() {
             </div>
         </div>
 
-        {/* THE PRINTABLE TICKET */}
         <div style={styles.ticket} className="printable-ticket">
           <div style={styles.brandHeader}>
              <h2 style={{ margin: 0, fontSize: '1.2em', letterSpacing: '2px', color: '#555' }}>RESTOSCAN MENU</h2>
