@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import io from 'socket.io-client';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom'; // ✅ Import Link
 
 const API_URL = 'https://restoscan-cloud-kitchen-load-management.onrender.com';
 
@@ -151,6 +151,11 @@ export default function Kitchen() {
       <header style={styles.header}>
         <div style={{ display: 'flex', gap: 20 }}>
           <div style={styles.logo}>🔥</div>
+          {/* ✅ Add these links here so they show up in the header */}
+    <nav style={{ display: 'flex', gap: '20px', marginRight: '20px' }}>
+      <Link to="/menu" style={styles.navLink}>🍔 Menu</Link>
+      <Link to="/qr-codes" style={styles.navLink}>🆔 QR Factory</Link>
+    </nav>
           <div>
             <h1 style={styles.title}>CHEF'S CONSOLE</h1>
             <p style={styles.subtitle}>{orders.length} TICKET{orders.length !== 1 && 'S'} QUEUED</p>
@@ -230,12 +235,30 @@ export default function Kitchen() {
 const getStatusColor = s => s === 'PENDING' ? '#ff7043' : s === 'PREPARING' ? '#42a5f5' : '#26a69a';
 
 const styles = {
+
   container: { background: '#121212', minHeight: '100vh', color: '#fff', fontFamily: 'sans-serif' },
   header: { background: '#1e1e1e', padding: '20px 40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #333' },
   logo: { fontSize: '1.8em' },
   title: { margin: 0, fontSize: '1.5em' },
   subtitle: { margin: 0, color: '#94a3b8', fontSize: '0.9em' },
   clockTime: { fontSize: '1.5em', fontWeight: 'bold' },
+  navLink: {
+    textDecoration: 'none',
+    color: '#fff',
+    fontSize: '0.9em',
+    fontWeight: 'bold',
+    opacity: 0.8,
+    transition: '0.3s',
+    cursor: 'pointer'
+  },
+  // For CustomerMenu (where background is light), change color to #333:
+  navLinkDark: {
+    textDecoration: 'none',
+    color: '#333',
+    fontSize: '0.9em',
+    fontWeight: 'bold',
+    marginRight: '15px'
+  },
   grid: { padding: 30, display: 'grid', gap: 25, gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' },
   card: { background: '#fff', borderRadius: 12, color: '#000', display: 'flex', flexDirection: 'column', boxShadow: '0 4px 15px rgba(0,0,0,0.3)' },
   cardHeader: { display: 'flex', justifyContent: 'space-between', padding: '15px 20px', borderBottom: '1px solid #eee' },

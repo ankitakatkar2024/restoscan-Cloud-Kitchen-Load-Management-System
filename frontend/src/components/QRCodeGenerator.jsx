@@ -1,13 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
 import io from 'socket.io-client';
+import { Link, useNavigate } from 'react-router-dom'; // ✅ Added Link & useNavigate
 
 // ✅ CONFIGURATION
 const API_URL = 'https://restoscan-cloud-kitchen-load-management.onrender.com';
 
 export default function QRCodeGenerator() {
   const socketRef = useRef(null);
-  // ✅ NEW: Points to your live Render link for all phones
+  const navigate = useNavigate();
+  
+  // Base URL for the menu links
   const baseUrl = "https://restoscan-cloud-kitchen-load-management.onrender.com";
   const [tableNum, setTableNum] = useState(1);
   
@@ -19,12 +22,11 @@ export default function QRCodeGenerator() {
     };
   }, []);
 
-  // ✅ DYNAMIC TABLE CHANGE LOGIC: Updates the factory and broadcasts to Menu/Kitchen
+  // ✅ Broadcaster: Updates other screens instantly
   const handleTableChange = (e) => {
     const newNum = e.target.value;
     setTableNum(newNum);
     
-    // ✅ This sends a signal to all other screens to update to this table instantly
     if (socketRef.current) {
         socketRef.current.emit('force_table_change', { table: newNum });
     }
@@ -36,48 +38,58 @@ export default function QRCodeGenerator() {
     window.print();
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('adminAuth');
+    localStorage.removeItem('kitchenAuthToken');
+    navigate('/login');
+  };
+
   return (
     <div style={styles.container}>
-      <header style={styles.navBar}>
+      {/* ✅ UPDATED NAVIGATION (Using Link component) */}
+      <header style={styles.navBar} className="no-print">
         <div style={styles.navLinks}>
-             <span>👨‍🍳 Kitchen</span>
-             <span>🍔 Menu</span>
-             <span>🆔 QR Codes</span>
-             <span>🛠️ Admin</span>
-             <button style={styles.logoutBtn}>Logout</button>
+             <Link to="/kitchen" style={styles.navItem}>👨‍🍳 Kitchen</Link>
+             <Link to="/menu" style={styles.navItem}>🍔 Menu</Link>
+             <Link to="/qr-codes" style={{...styles.navItem, color: '#FF4500'}}>🆔 QR Codes</Link>
+             <Link to="/admin" style={styles.navItem}>🛠️ Admin</Link>
+             <button onClick={handleLogout} style={styles.logoutBtn}>Logout</button>
         </div>
       </header>
 
       <div style={styles.card}>
-        <h1 style={{ color: '#fff', margin: '0', fontSize: '1.8em' }}>📱 QR Code Factory</h1>
-        <p style={{ color: '#aaa', marginBottom: '20px' }}>Generate codes for your tables.</p>
+        <div className="no-print">
+            <h1 style={{ color: '#fff', margin: '0', fontSize: '1.8em' }}>📊 QR Code Factory</h1>
+            <p style={{ color: '#aaa', marginBottom: '25px', fontSize: '0.9em' }}>Generate and print codes for your tables.</p>
 
-        {/* CONTROLS */}
-        <div className="no-print" style={styles.controlBox}>
-          <label style={styles.label}>Select Table Number:</label>
-          <input
-            type="number"
-            value={tableNum}
-            onChange={handleTableChange}
-            style={styles.input}
-            min="1"
-          />
+            {/* CONTROLS */}
+            <div style={styles.controlBox}>
+              <label style={styles.label}>Select Table Number:</label>
+              <input
+                type="number"
+                value={tableNum}
+                onChange={handleTableChange}
+                style={styles.input}
+                min="1"
+              />
+            </div>
         </div>
 
-        {/* THE ORANGE THEME TICKET */}
+        {/* THE PRINTABLE TICKET */}
         <div style={styles.ticket} className="printable-ticket">
           <div style={styles.brandHeader}>
-             <h2 style={{ margin: 0, fontSize: '1.2em', letterSpacing: '1px' }}>RESTOSCAN MENU</h2>
-             <h1 style={{ margin: '10px 0', color: '#FF4500', fontSize: '2em' }}>TABLE {tableNum}</h1>
+             <h2 style={{ margin: 0, fontSize: '1.2em', letterSpacing: '2px', color: '#555' }}>RESTOSCAN MENU</h2>
+             <h1 style={{ margin: '10px 0', color: '#FF4500', fontSize: '2.4em', fontWeight: '800' }}>TABLE {tableNum}</h1>
           </div>
           
           <div style={styles.qrWrapper}>
-            <QRCodeCanvas value={menuLink} size={180} level="H" />
+            {/* ✅ Correct library usage */}
+            <QRCodeCanvas value={menuLink} size={200} level="H" includeMargin={true} />
           </div>
 
-          <p style={styles.scanText}>Scan to order food instantly.</p>
-          <div style={{marginTop: '5px'}}>
-             <small style={{ color: '#777', fontSize: '0.65em' }}>{menuLink}</small>
+          <p style={styles.scanText}>Scan to order food instantly</p>
+          <div style={{marginTop: '10px', borderTop: '1px solid #eee', paddingTop: '10px'}}>
+             <code style={{ color: '#999', fontSize: '0.7em', wordBreak: 'break-all' }}>{menuLink}</code>
           </div>
         </div>
 
@@ -91,10 +103,10 @@ export default function QRCodeGenerator() {
           .no-print { display: none !important; }
           body { background: white !important; padding: 0 !important; }
           .printable-ticket { 
-            border: 2px dashed #FF4500 !important; 
+            border: 3px dashed #FF4500 !important; 
             box-shadow: none !important;
-            margin: 20px auto !important;
-            color: black !important;
+            margin: 0 auto !important;
+            width: 100% !important;
           }
         }
       `}</style>
@@ -103,17 +115,18 @@ export default function QRCodeGenerator() {
 }
 
 const styles = {
-  container: { minHeight: '100vh', background: '#0a0a0a', paddingBottom: '40px', fontFamily: 'sans-serif' },
-  navBar: { background: '#1a1a1a', padding: '15px 40px', display: 'flex', justifyContent: 'center', marginBottom: '40px' },
-  navLinks: { display: 'flex', gap: '25px', color: '#fff', alignItems: 'center', fontSize: '0.9em', fontWeight: 'bold' },
-  logoutBtn: { background: '#FF4500', color: '#fff', border: 'none', padding: '6px 15px', borderRadius: '5px', cursor: 'pointer' },
-  card: { background: '#121212', maxWidth: '480px', margin: '0 auto', padding: '40px', borderRadius: '15px', textAlign: 'center', border: '1px solid #333' },
-  controlBox: { marginBottom: '25px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' },
-  label: { color: '#fff', fontSize: '1em' },
-  input: { padding: '8px', width: '60px', background: '#1a1a1a', color: '#fff', border: '1px solid #444', textAlign: 'center', borderRadius: '5px' },
-  ticket: { background: '#fff', color: '#000', padding: '30px', borderRadius: '10px', border: '2px dashed #FF4500', margin: '0 auto' },
-  brandHeader: { marginBottom: '20px' },
-  qrWrapper: { padding: '10px', background: '#fff', display: 'inline-block' },
-  scanText: { marginTop: '15px', fontSize: '0.9em', color: '#444', fontWeight: '500' },
-  printButton: { background: '#FF4500', color: 'white', padding: '12px 25px', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer', marginTop: '30px', width: '80%' }
+  container: { minHeight: '100vh', background: '#0a0a0a', paddingBottom: '60px', fontFamily: 'sans-serif' },
+  navBar: { background: '#1a1a1a', padding: '15px 20px', display: 'flex', justifyContent: 'center', borderBottom: '1px solid #333' },
+  navLinks: { display: 'flex', gap: '30px', alignItems: 'center' },
+  navItem: { color: '#fff', textDecoration: 'none', fontSize: '0.85em', fontWeight: '600', opacity: 0.8 },
+  logoutBtn: { background: '#FF4500', color: '#fff', border: 'none', padding: '8px 18px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' },
+  card: { background: '#121212', maxWidth: '500px', margin: '40px auto', padding: '30px', borderRadius: '20px', textAlign: 'center', border: '1px solid #222' },
+  controlBox: { marginBottom: '30px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px', background: '#1a1a1a', padding: '15px', borderRadius: '12px' },
+  label: { color: '#eee', fontSize: '0.95em' },
+  input: { padding: '10px', width: '70px', background: '#0a0a0a', color: '#fff', border: '1px solid #FF4500', textAlign: 'center', borderRadius: '8px', fontSize: '1.1em', fontWeight: 'bold' },
+  ticket: { background: '#fff', color: '#000', padding: '40px 20px', borderRadius: '15px', border: '2px dashed #FF4500', margin: '0 auto' },
+  brandHeader: { marginBottom: '25px' },
+  qrWrapper: { padding: '15px', background: '#fff', display: 'inline-block', borderRadius: '10px', border: '1px solid #f0f0f0' },
+  scanText: { marginTop: '20px', fontSize: '1em', color: '#333', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '1px' },
+  printButton: { background: '#FF4500', color: 'white', padding: '15px 25px', borderRadius: '10px', border: 'none', fontWeight: 'bold', cursor: 'pointer', marginTop: '30px', width: '100%' }
 };

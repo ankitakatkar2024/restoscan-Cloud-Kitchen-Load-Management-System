@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import io from 'socket.io-client';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom'; // ✅ Import Link
 import QRCode from "react-qr-code";
 
 // ✅ CONFIGURATION
@@ -22,31 +22,30 @@ export default function CustomerMenu() {
   // 4. Defaults to '1' only if nothing else exists.
 // ✅ Replace your tableNumber state with this exact logic
 // ✅ DYNAMIC TABLE SWITCHING LOGIC
+// ✅ IMPROVED DYNAMIC TABLE SWITCHING
 const [tableNumber, setTableNumber] = useState(() => {
-    // Check URL first - this is the "Source of Truth" for a new scan
-    const params = new URLSearchParams(window.location.search);
-    const urlTable = params.get('table');
-    
-    if (urlTable) {
-        // If a new number is in the URL, overwrite the old memory immediately
-        localStorage.setItem('myTableNum', urlTable);
-        return urlTable;
-    }
-    
-    // If no URL param, use the last scanned table from memory
-    const savedTable = localStorage.getItem('myTableNum');
-    return savedTable || '1'; // Default to 1 if it's a direct link visit
+  const params = new URLSearchParams(window.location.search);
+  const urlTable = params.get('table');
+
+  if (urlTable) {
+    localStorage.setItem('myTableNum', urlTable);
+    return urlTable;
+  }
+
+  const savedTable = localStorage.getItem('myTableNum');
+  return savedTable || '1';
 });
 
 // ✅ WATCH FOR URL CHANGES
 useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const urlTable = params.get('table');
-    if (urlTable && urlTable !== tableNumber) {
-        setTableNumber(urlTable);
-        localStorage.setItem('myTableNum', urlTable);
-    }
-}, [searchParams, tableNumber]);
+  const urlTable = searchParams.get('table');
+  if (urlTable && urlTable !== tableNumber) {
+    setTableNumber(urlTable);
+    localStorage.setItem('myTableNum', urlTable);
+    setCart({});
+  }
+}, [searchParams]);
+
 
   // --- STATE MANAGEMENT ---
   const [menu, setMenu] = useState([]);
@@ -156,14 +155,16 @@ useEffect(() => {
       if (!prev || prev.id !== id) return prev;
 
       // ✅ Play sound when status changes (e.g., PENDING -> PREPARING or PREPARING -> READY)
-      if (status !== prev.status) {
-          notifySound.play().catch(e => console.log("Audio play failed:", e));
-          
-          // Optional: Add vibration for mobile devices
-          if (navigator.vibrate) {
-              navigator.vibrate([200, 100, 200]);
-          }
-      }
+if (status !== prev.status) {
+    // Wrap in a try/catch or silent catch to prevent console errors
+    notifySound.play().catch(e => {
+        console.warn("Audio autoplay blocked until user interacts with the page.");
+    });
+    
+    if (navigator.vibrate) {
+        navigator.vibrate([200, 100, 200]);
+    }
+}
 
       if (status === 'COMPLETED') {
            localStorage.removeItem('activeOrderId');
@@ -193,10 +194,13 @@ useEffect(() => {
   });
 
   return () => {
-    if (socketRef.current) socketRef.current.disconnect();
+    if (socketRef.current) {
+      socketRef.current.off('order_status_updated'); // Clean up specific listeners
+      socketRef.current.off('force_table_change');
+      socketRef.current.disconnect();
+    }
   };
-}, [tableNumber]); // Added tableNumber to dependency to ensure socket has context if needed
-
+}, [tableNumber]); // Re-runs when table changes to re-join correct context
   // --- HELPERS ---
   const isKitchenBusy = () => {
     // Simple check: if any station is overloaded, warn the user
@@ -237,119 +241,160 @@ useEffect(() => {
     });
   };
 
-  const placeOrder = () => {
-    // 1. Validation Checks
-    if (isOrdering) return;
-    
-    // Check if cart is empty
-    const orderItems = Object.keys(cart).map(id => {
-      const item = menu.find(i => i.id === parseInt(id));
-      if (!item) return null;
-      return {
+const placeOrder = () => {
+if (isOrdering) return;
+
+const orderItems = Object.keys(cart)
+.map(id => {
+const item = menu.find(i => i.id === parseInt(id));
+if (!item) return null;
+return {
         id: item.id,
         name: item.name,
         quantity: cart[id],
-        station_id: item.station_id || 1, // Default to 1 if missing
+        station_id: item.station_id || 1,
         price: item.price
       };
-    }).filter(Boolean);
-
-    if (orderItems.length === 0) return alert("Your cart is empty!");
-
-    // 2. Lock UI
-    setIsOrdering(true);
-    const totalOrderPrice = orderItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-
-    // 3. API Call
-    axios.post(`${API_URL}/api/orders`, {
-      customer_name: `Table ${tableNumber}`, // ✅ USES THE STICKY TABLE NUMBER
-      items: orderItems,
-      total_price: totalOrderPrice
     })
-    .then(res => {
-      const order = res.data.order || res.data; 
-      
-      setActiveOrder({
-        id: order.id || res.data.orderId,
-        status: order.status || 'PENDING',
-        payment_status: 'PENDING',
-        items: orderItems.map(i => ({
-          name: i.name,
-          qty: i.quantity,
-          price: i.price
-        })),
-        total_price: totalOrderPrice
-      });
+    .filter(Boolean);
 
-      localStorage.setItem('activeOrderId', order.id || res.data.orderId);
-      setCart({});
-    })
-    .catch(err => {
-      console.error("Order Place Error:", err);
-      // Detailed error for debugging, or simple message for user
-      const msg = err.response?.data?.error || "Failed to place order. Check connection.";
-      alert(`❌ ${msg}`);
-    })
-    .finally(() => {
-      setIsOrdering(false); // Unlock UI
-    });
-  };
+  if (orderItems.length === 0) {
+    alert("Your cart is empty!");
+    return;
+  }
 
-  // --- PAYMENT LOGIC ---
-  const openBill = () => {
-      setPaymentMethod(null); 
-      setShowBill(true);
-  };
+setIsOrdering(true);
 
-  const handlePaymentSelection = (method) => {
-    setPaymentMethod(method);
-    // Tell backend user is attempting to pay
-    if(activeOrder?.id) {
-        axios.put(`${API_URL}/api/orders/${activeOrder.id}/request-payment`, { method })
-            .catch(() => {}); 
-    }
-  };
+const totalOrderPrice = orderItems.reduce(
+(sum, item) => sum + item.price * item.quantity,
+0
+);
 
-  const confirmPayment = async () => {
-    if(!activeOrder?.id) return;
+axios.post(`${API_URL}/api/orders`, {
+customer_name: `Table ${tableNumber}`,
+table_id: tableNumber,
+items: orderItems,
+total_price: totalOrderPrice
+})
+.then(res => {
+const order = res.data.order || res.data;
 
-    try {
-        // ✅ Notify Manager Dashboard
-        await axios.put(`${API_URL}/api/orders/${activeOrder.id}/request-payment`, { 
-            method: paymentMethod || 'UPI',
-            status: 'VERIFICATION_REQUESTED'
-        });
-        alert("✅ Manager Notified! Please stay on this screen while we verify.");
-    } catch (error) {
-        console.error("Payment notification failed", error);
-        alert("⚠️ Network Error: Please wave to the manager to confirm payment.");
-    }
-  };
+setActiveOrder({
+  id: order.id || res.data.orderId,
+  status: order.status || "PENDING",
+  payment_status: "PENDING",
+  items: orderItems.map(i => ({
+    name: i.name,
+    qty: i.quantity,
+    price: i.price
+  })),
+  total_price: totalOrderPrice
+});
 
-  const closeSession = async () => {
-    if (activeOrder) {
-      try {
-        await axios.put(`${API_URL}/api/orders/${activeOrder.id}/status`, { 
-            status: 'COMPLETED' 
-        });
-      } catch (err) {
-        console.error("Failed to close order on server", err);
-      }
-    }
-    localStorage.removeItem('activeOrderId');
-    setShowBill(false);
-    setActiveOrder(null);
-  };
+localStorage.setItem(
+  "activeOrderId",
+  order.id || res.data.orderId
+);
 
-  // Filter Menu Logic
-  const filteredMenu = menu
-    .filter(item => {
-      const categoryMatch = selectedCategory === 'All' || item.category === selectedCategory;
-      const vegMatch = onlyVeg ? item.is_veg : true;
-      return categoryMatch && vegMatch;
-    })
-    .sort((a, b) => diningOrder.indexOf(a.category) - diningOrder.indexOf(b.category));
+setCart({});
 
+
+})
+.catch(err => {
+console.error("Order Place Error:", err);
+
+
+const msg =
+  err.response?.data?.error ||
+  "Failed to place order.";
+
+alert(`❌ ${msg}`);
+
+
+})
+.finally(() => {
+setIsOrdering(false);
+});
+};
+
+// --- PAYMENT LOGIC ---
+const openBill = () => {
+setPaymentMethod(null);
+setShowBill(true);
+};
+
+const handlePaymentSelection = method => {
+setPaymentMethod(method);
+
+if (activeOrder?.id) {
+axios
+.put(
+`${API_URL}/api/orders/${activeOrder.id}/request-payment`,
+{ method }
+)
+.catch(() => {});
+}
+};
+
+const confirmPayment = async () => {
+if (!activeOrder?.id) return;
+
+try {
+await axios.put(
+`${API_URL}/api/orders/${activeOrder.id}/request-payment`,
+{
+method: paymentMethod || "UPI",
+status: "VERIFICATION_REQUESTED"
+}
+);
+
+alert(
+  "✅ Manager Notified! Please stay on this screen while we verify."
+);
+
+
+} catch (error) {
+console.error("Payment notification failed", error);
+
+
+alert(
+  "⚠️ Network Error: Please wave to the manager to confirm payment."
+);
+
+
+}
+};
+
+const closeSession = async () => {
+if (activeOrder) {
+try {
+await axios.put(
+`${API_URL}/api/orders/${activeOrder.id}/status`,
+{ status: "COMPLETED" }
+);
+} catch (err) {
+console.error(
+"Failed to close order on server",
+err
+);
+}
+}
+
+localStorage.removeItem("activeOrderId");
+setShowBill(false);
+setActiveOrder(null);
+};
+
+// Filter Menu Logic
+const filteredMenu = menu
+  .filter(item => {
+    const categoryMatch = selectedCategory === "All" || item.category === selectedCategory;
+    const vegMatch = onlyVeg ? item.is_veg : true;
+    return categoryMatch && vegMatch;
+  })
+  .sort((a, b) => 
+    diningOrder.indexOf(a.category) - diningOrder.indexOf(b.category)
+  ); // ✅ Ensure this bracket is closed correctly
 
   // ==================== RENDER: LOADING ====================
   if (isLoading) {
@@ -500,7 +545,10 @@ useEffect(() => {
 
       <header style={styles.header}>
         <div style={styles.topBar}>
-          <div>
+          <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+            {/* ✅ ADDED NAVIGATION LINKS HERE */}
+            <Link to="/kitchen" style={styles.navLink}>👨‍🍳 Kitchen</Link>
+            <Link to="/qr-codes" style={styles.navLink}>🆔 QR Codes</Link>
             <h1 style={styles.title}>RestoScan</h1>
             <p style={styles.subtitle}>Table {tableNumber} • Fine Dining</p>
           </div>
@@ -611,6 +659,25 @@ const styles = {
   nonVegIcon: { border: '2px solid #c0392b', width: '14px', height: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' },
   nonVegDot: { background: '#c0392b', width: '8px', height: '8px', borderRadius: '50%' },
   busyBanner: { background: '#ffebee', color: '#c62828', padding: '10px', textAlign: 'center', fontWeight: '600', position: 'sticky', top: 0, zIndex: 101 },
+
+  navLink: {
+    textDecoration: 'none',
+    color: '#333', // Dark text for light background
+    fontSize: '0.95em',
+    fontWeight: '700',
+    marginRight: '20px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '5px'
+  },
+  // Ensure the top bar can fit these links
+  topBar: { 
+    padding: '15px 25px', 
+    display: 'flex', 
+    justifyContent: 'space-between', 
+    alignItems: 'center',
+    flexWrap: 'wrap' // Helps mobile view if links get too long
+  },
 
   // Status Screen
   statusContainer: { padding: '40px', textAlign: 'center', fontFamily: 'sans-serif', height: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', background: '#fdfbf7' },

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Link, Navigate } from 'react-router-dom';
 
 // --- COMPONENTS ---
-// ✅ FIX: Import from "KitchenDisplay" (Your actual filename)
+// ✅ Matching your imports to the paths used in your internal Links
 import Kitchen from './components/KitchenDisplay'; 
 import CustomerMenu from './components/CustomerMenu';
 import QRCodeGenerator from './components/QRCodeGenerator';
@@ -11,13 +11,13 @@ import Login from './components/Login';
 import Signup from './components/Signup'; 
 import AdminLogin from './components/AdminLogin'; 
 
-// --- 🔒 EXISTING ADMIN GUARD (For Dashboard) ---
+// --- 🔒 EXISTING ADMIN GUARD (For Manager Dashboard) ---
 const ProtectedRoute = ({ children }) => {
   const isAuth = localStorage.getItem('adminAuth') === 'true';
   return isAuth ? children : <Navigate to="/login" replace />;
 };
 
-// --- 🛡️ NEW KITCHEN GUARD (For Chef Only) ---
+// --- 🛡️ NEW KITCHEN GUARD (For Chef Console) ---
 const KitchenGuard = ({ children }) => {
   // Checks for the special token created in AdminLogin.jsx
   const isChef = localStorage.getItem('kitchenAuthToken'); 
@@ -25,7 +25,6 @@ const KitchenGuard = ({ children }) => {
 };
 
 function App() {
-  // Existing State for General Admin
   const [isAuthenticated, setIsAuthenticated] = useState(
     localStorage.getItem('adminAuth') === 'true'
   );
@@ -38,46 +37,49 @@ function App() {
 
   const handleLogout = () => {
     localStorage.removeItem('adminAuth');
+    localStorage.removeItem('kitchenAuthToken'); // Clear Chef token too
     localStorage.removeItem('userRole');
     setIsAuthenticated(false);
   };
 
   return (
     <BrowserRouter>
-      {/* --- NAVIGATION BAR --- */}
-      <nav style={{ padding: '15px', background: '#222', textAlign: 'center', display: 'flex', justifyContent: 'center', gap: '20px', borderBottom: '1px solid #444' }}>
-        {/* Updated Kitchen Link points to protected route */}
+      {/* --- GLOBAL NAVIGATION BAR --- */}
+      <nav style={navBarStyle}>
+        {/* These Links match the routes defined below */}
         <Link to="/kitchen" style={linkStyle}>👨‍🍳 Kitchen</Link>
         <Link to="/menu" style={linkStyle}>🍔 Menu</Link>
+        
+        {/* ✅ Updated to match the "qr-generator" path if you used that in internal links, 
+            or keep "qr-codes" if that is your preferred URL */}
         <Link to="/qr-codes" style={linkStyle}>🖨️ QR Codes</Link>
         
-        {/* General Admin Links */}
         {isAuthenticated ? (
-           <>
-             <Link to="/admin" style={linkStyle}>🛠️ Manager</Link>
-             <button onClick={handleLogout} style={logoutStyle}>Logout</button>
-           </>
+          <>
+            <Link to="/admin" style={linkStyle}>🛠️ Manager</Link>
+            <button onClick={handleLogout} style={logoutStyle}>Logout</button>
+          </>
         ) : (
-             <Link to="/login" style={linkStyle}>🔒 Manager Login</Link>
+          <Link to="/login" style={linkStyle}>🔒 Login</Link>
         )}
       </nav>
 
       {/* --- ROUTE DEFINITIONS --- */}
       <Routes>
-        {/* 1. Public Customer Route */}
+        {/* 1. Customer Menu (Public) */}
         <Route path="/menu" element={<CustomerMenu />} />
         
-        {/* 2. Public Tools */}
+        {/* 2. QR Code Generator (Public/Staff Tool) */}
+        {/* ✅ If you used <Link to="/qr-generator"> in other files, change this path to "/qr-generator" */}
         <Route path="/qr-codes" element={<QRCodeGenerator />} />
-        
-        {/* 3. General Auth Routes (Managers/Users) */}
+        <Route path="/qr-generator" element={<QRCodeGenerator />} />
+
+        {/* 3. Authentication Routes */}
         <Route path="/login" element={<Login onLogin={handleLogin} />} />
         <Route path="/signup" element={<Signup />} />
-
-        {/* 4. ✅ NEW: Chef Login Page (Hidden) */}
         <Route path="/admin-login" element={<AdminLogin />} />
 
-        {/* 5. ✅ NEW: Protected Kitchen Route */}
+        {/* 4. Protected Kitchen Route (Requires Kitchen Token) */}
         <Route 
           path="/kitchen" 
           element={
@@ -87,7 +89,7 @@ function App() {
           } 
         />
 
-        {/* 6. Existing Protected Admin Dashboard */}
+        {/* 5. Protected Manager Dashboard (Requires Admin Auth) */}
         <Route 
           path="/admin" 
           element={
@@ -97,7 +99,7 @@ function App() {
           } 
         />
 
-        {/* Default Redirect */}
+        {/* Default Redirect: Go to Menu if path doesn't exist */}
         <Route path="*" element={<Navigate to="/menu" />} />
       </Routes>
     </BrowserRouter>
@@ -105,25 +107,42 @@ function App() {
 }
 
 // --- STYLES ---
+const navBarStyle = {
+  padding: '15px',
+  background: '#1a1a1a', // Darker professional background
+  textAlign: 'center',
+  display: 'flex',
+  justifyContent: 'center',
+  alignItems: 'center',
+  gap: '15px',
+  borderBottom: '2px solid #FF4500', // Orange accent line
+  position: 'sticky',
+  top: 0,
+  zIndex: 1000
+};
+
 const linkStyle = { 
   color: 'white', 
   textDecoration: 'none', 
   fontWeight: 'bold', 
-  fontSize: '1.1em',
-  padding: '8px 12px',
-  borderRadius: '5px',
-  transition: 'background 0.2s'
+  fontSize: '0.95em',
+  padding: '8px 15px',
+  borderRadius: '6px',
+  transition: '0.3s all',
+  cursor: 'pointer'
 };
 
 const logoutStyle = {
-  background: '#e74c3c',
+  background: '#FF4500',
   color: 'white',
   border: 'none',
-  padding: '8px 15px',
-  borderRadius: '5px',
+  padding: '8px 18px',
+  borderRadius: '6px',
   cursor: 'pointer',
   fontWeight: 'bold',
-  marginLeft: '10px'
+  fontSize: '0.9em',
+  marginLeft: '10px',
+  transition: '0.3s'
 };
 
 export default App;
